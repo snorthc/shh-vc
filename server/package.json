@@ -1,0 +1,20 @@
+{
+  "name": "@veil/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/index.ts",
+    "start": "node --experimental-strip-types src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "livekit-server-sdk": "^2.13.0",
+    "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "@types/ws": "^8.18.2",
+    "typescript": "^5.7.3"
+  }
+}

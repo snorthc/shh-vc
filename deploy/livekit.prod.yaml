@@ -1,0 +1,49 @@
+# Production LiveKit config.
+#
+# The privacy-critical setting is the ICE policy: media must go through this
+# server, never peer to peer, or participants learn each other's IP addresses.
+# LiveKit is an SFU, so all media is relayed by design — but TURN must be
+# available for clients behind restrictive NATs so they never fall back to a
+# direct connection.
+port: 7880
+bind_addresses:
+  - 0.0.0.0
+
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: true
+  # Oracle's Always Free instances sit behind a 1:1 NAT; the server needs to
+  # advertise its public address.
+  # external_ip: <your.public.ip>
+
+turn:
+  enabled: true
+  domain: turn.example.com
+  tls_port: 5349
+  udp_port: 3478
+  # Point these at the Let's Encrypt files Caddy or certbot maintains.
+  cert_file: /etc/livekit/turn/fullchain.pem
+  key_file: /etc/livekit/turn/privkey.pem
+
+keys:
+  # Generate with: livekit-server generate-keys
+  # Keep out of git; inject via the systemd unit's EnvironmentFile.
+  ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+
+room:
+  # The cost ceiling, enforced here as well as in the token service so it holds
+  # even against a modified client.
+  max_participants: 6
+  empty_timeout: 120
+  departure_timeout: 20
+  max_metadata_size: 0
+
+logging:
+  level: warn
+  json: true
+  # No per-participant logging: we promise not to retain addresses.
+  sample_duplicates: true
+
+# Zero persistence: no Redis, so room state lives in this process's memory and
+# dies with it. This also means a single node — which is what the free tier is.

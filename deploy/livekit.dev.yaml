@@ -1,0 +1,19 @@
+# Local development only. These credentials are public by design — never
+# deploy this file.
+port: 7880
+bind_addresses:
+  - 127.0.0.1
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50200
+  use_external_ip: false
+keys:
+  devkey: devsecretdevsecretdevsecretdevsecret
+logging:
+  level: info
+  json: false
+room:
+  max_participants: 6
+  empty_timeout: 120
+  departure_timeout: 20

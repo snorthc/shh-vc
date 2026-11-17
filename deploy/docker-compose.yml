@@ -1,0 +1,12 @@
+# Local development stack.
+#
+# Host networking is required: LiveKit needs a wide UDP port range and
+# Docker's per-port mapping is unusably slow for that.
+services:
+  livekit:
+    image: livekit/livekit-server:v1.9.3
+    command: --config /etc/livekit.yaml --node-ip 127.0.0.1
+    network_mode: host
+    volumes:
+      - ./livekit.dev.yaml:/etc/livekit.yaml:ro
+    restart: unless-stopped

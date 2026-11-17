@@ -1,0 +1,36 @@
+# Caddy terminates TLS, serves the static frontend, and proxies the token
+# service and LiveKit's WebSocket. Certificates are automatic (Let's Encrypt).
+#
+# Replace both hostnames. A free subdomain (DuckDNS and friends) works fine.
+
+talk.example.com {
+	encode zstd gzip
+
+	header {
+		# The room secret lives in the fragment, which browsers never send —
+		# but no-referrer also stops the room id leaking to third parties.
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(self), microphone=(self), display-capture=(self)"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# No third-party scripts, styles or fonts. media-src allows https so a
+		# watch-together video link can play; nothing else may load cross-origin.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; media-src 'self' blob: https:; worker-src 'self' blob:; connect-src 'self' wss://sfu.example.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8787
+	}
+
+	handle {
+		root * /srv/veil
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+sfu.example.com {
+	reverse_proxy 127.0.0.1:7880
+}

@@ -1,0 +1,19 @@
+{
+  "name": "bravetalk",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "web",
+    "server"
+  ],
+  "scripts": {
+    "stack": "./dev-stack.sh",
+    "dev": "npm run dev --workspace=web",
+    "build": "npm run build --workspace=web",
+    "test": "npm run test --workspace=web",
+    "test:e2e": "npm run build --workspace=web && npm run test:e2e --workspace=web",
+    "typecheck": "npm run typecheck --workspace=web && npm run typecheck --workspace=server",
+    "screens": "npm run build --workspace=web && cd web && npx vitest run --config vitest.shots.config.ts"
+  }
+}
