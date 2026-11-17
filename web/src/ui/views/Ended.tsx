@@ -8,7 +8,7 @@ const COPY: Record<string, { title: string; body: string }> = {
   'room-closed': { title: 'The room has closed', body: 'Everyone has left.' },
   'connection-lost': {
     title: 'The connection was lost',
-    body: 'BraveTalk could not reconnect. Check your network and rejoin.',
+    body: 'Shh VC could not reconnect. Check your network and rejoin.',
   },
   failed: { title: 'Could not join', body: 'The room could not be reached.' },
 };
@@ -50,10 +50,10 @@ export function Unsupported() {
         <Mark size={28} />
         <h1>This browser cannot encrypt calls</h1>
         <p>
-          BraveTalk encrypts every frame before it leaves your device, which needs a browser feature
+          Shh VC encrypts every frame before it leaves your device, which needs a browser feature
           this one is missing. Chrome, Edge, Brave, Firefox 117+ and Safari 15.4+ all have it.
         </p>
-        <p class="hint">BraveTalk will not fall back to an unencrypted call.</p>
+        <p class="hint">Shh VC will not fall back to an unencrypted call.</p>
         {e2eeSupported() && (
           <div class="center-actions">
             <Button variant="primary" size="lg" onClick={backToStart}>

@@ -1,5 +1,5 @@
 /**
- * BraveTalk token service.
+ * Shh VC token service.
  *
  * Its whole job: turn a room id into a LiveKit join token. It must never see
  * the room secret, a display name, or any media key, and it writes nothing to
@@ -318,7 +318,7 @@ sweep.unref();
 
 server.listen(config.port, config.host, () => {
   console.log(
-    `bravetalk token service on http://${config.host}:${config.port} ` +
+    `shh vc token service on http://${config.host}:${config.port} ` +
       `(max ${config.maxParticipants}/room, ttl ${config.tokenTtlSeconds}s, no persistence); ` +
       `key-agreement relay on ws://${config.host}:${config.port}/api/signal`,
   );

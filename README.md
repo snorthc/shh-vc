@@ -1,11 +1,25 @@
-# BraveTalk
+# Shh VC
 
 Private rooms for talking, sharing your screen and watching together. Up to
 six people, no account: start a room, send the link.
 
-Voice, video, screen shares and chat are end-to-end encrypted in the browser.
-The server relays bytes it cannot read. Everything runs on free
-infrastructure.
+Everything is end-to-end encrypted, and everything runs for free.
+
+## Two ways to run it
+
+| | **Serverless** (what is hosted) | **Self-hosted relay** |
+|---|---|---|
+| What you need | A static site. Nothing else. | A server running LiveKit and the token service |
+| How browsers connect | Directly to each other | Through your relay |
+| How they find each other | Public Nostr relays, via [Trystero](https://github.com/dmotz/trystero). No account. | Your server |
+| Can people in a room see each other's IP? | **Yes** | No |
+| Host controls (remove, lock, mute for all) | No — nothing can enforce them | Yes |
+| Works behind every network | Most. Two people both behind strict NATs may fail to connect | Yes (TURN) |
+| Cost | Free, no accounts | Free on Oracle's free tier, which needs an account and a card |
+
+Build the serverless site with `npm run build:direct --workspace=web`; the
+output in `web/dist-pages` can be dropped on any static host. Everything else
+in this README applies to both unless it says otherwise.
 
 Screens are in [`docs/screens`](docs/screens).
 
@@ -20,7 +34,7 @@ you hearing others. Neither touches the other, and other people see each
 state on your tile.
 
 **Screen sharing with a preview.** Pick a screen, window or tab in the
-browser's picker and BraveTalk shows it to you first. Nothing is sent until you
+browser's picker and Shh VC shows it to you first. Nothing is sent until you
 press *Start sharing*; cancelling stops the capture. Then:
 
 - presets — Balanced, Text & code, Presentation, Cinema, Gaming & motion, Low
@@ -38,11 +52,11 @@ press *Start sharing*; cancelling stops the capture. Then:
 | | Who can pause? |
 |---|---|
 | A video file on your device — it plays on your device and is streamed to the room; nothing is uploaded | **Everyone** |
-| A link to an MP4/WebM — each browser loads it, BraveTalk keeps everyone at the same moment | **Everyone** |
+| A link to an MP4/WebM — each browser loads it, Shh VC keeps everyone at the same moment | **Everyone** |
 | Netflix, YouTube, any site — share the tab with sound | Only the sharer. Everyone else gets **Ask to pause**, which pings them |
 
 A web page cannot press buttons inside another site's player, so the third
-row is the honest limit. BraveTalk does not bypass DRM.
+row is the honest limit. Shh VC does not bypass DRM.
 
 **Chat**, in the style people know from Discord: avatar gutter, grouped
 messages, replies, reactions, edit and delete of your own messages, typing
@@ -63,11 +77,11 @@ can drag away, tiles that fill a portrait screen.
 
 | | |
 |---|---|
-| ✅ Other participants never learn your IP | All media is relayed; there is no peer-to-peer path |
+| ✅ Other participants never learn your IP *(self-hosted relay only)* | All media is relayed. In the serverless build browsers connect directly, so people in a room **can** see each other's IP |
 | ✅ The server cannot read calls, shares or chat | Encrypted per sender before leaving the browser |
 | ✅ The server cannot join your call | Joining the key group needs a MAC under a key derived from the link |
 | ✅ Nothing is kept | No database, no logs of addresses, no accounts |
-| ❌ The server sees your IP | And who is in a room, when, and how much they send. Use a VPN if that matters |
+| ❌ Infrastructure sees your IP | Your relay server, or in the serverless build the public Nostr relays and STUN servers. None of them can read the room. Use a VPN if that matters |
 | ❌ Anyone with the link can join | Until the host locks the room |
 | ❌ No protection after a device is compromised | Keys rotate on join and leave; that does not heal a compromised device |
 | ❌ Not audited | Nobody outside this repo has reviewed the cryptography |
@@ -128,6 +142,15 @@ one room:
 - phones (390×844 and 360×640): no sideways scroll, nothing clipped, touch
   targets ≥ 44 px, text ≥ 11 px, 16 px inputs, sheets that drag to dismiss
 - the room secret appears in no request, and nothing loads from a third party
+
+```bash
+npm run test:e2e:direct --workspace=web
+```
+
+The same browser tests against the serverless build, with a local Nostr relay
+standing in for the public ones: 27 pass, 8 server-only tests are skipped. One
+of them captures every frame sent to the relay and checks it contains no room
+secret, room id, name, message or readable connection data.
 
 ```bash
 npm run screens

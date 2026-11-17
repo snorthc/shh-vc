@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
 import { test } from 'vitest';
 import { freshSecret, HOST_KEY, joinRoom, newClient, startHarness } from '../tests/e2e/harness.ts';
 
-const OUT = process.env.SHOTS_DIR ?? '/tmp/bravetalk-shots';
+const OUT = process.env.SHOTS_DIR ?? '/tmp/shhvc-shots';
 mkdirSync(OUT, { recursive: true });
 const only = (process.env.SHOTS ?? '').split(',').filter(Boolean);
 const want = (name: string) => only.length === 0 || only.some((o) => name.startsWith(o));

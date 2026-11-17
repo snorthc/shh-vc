@@ -33,7 +33,7 @@ export interface Settings {
   layout: LayoutMode;
 }
 
-const KEY = 'bravetalk.settings.v1';
+const KEY = 'shhvc.settings.v1';
 
 export const DEFAULT_SETTINGS: Settings = {
   name: '',

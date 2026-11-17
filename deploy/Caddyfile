@@ -25,7 +25,7 @@ talk.example.com {
 	}
 
 	handle {
-		root * /srv/veil
+		root * /srv/shh-vc
 		try_files {path} /index.html
 		file_server
 	}

@@ -24,6 +24,7 @@ import {
   Track,
   type TrackPublishOptions,
 } from 'livekit-client';
+import { DIRECT, RELAY_URLS } from '../app/mode.ts';
 import { settings, updateSettings } from '../app/settings.ts';
 import { toast } from '../app/toasts.ts';
 import { describeError, hueFor } from '../app/util.ts';
@@ -36,7 +37,8 @@ import {
   sanitizeText,
   setStatus,
 } from '../chat/store.ts';
-import { randomBytes, toB64Url } from '../crypto/bytes.ts';
+import { sha256 } from '@noble/hashes/sha2';
+import { concat, randomBytes, toB64Url, utf8 } from '../crypto/bytes.ts';
 import { GroupKeys, type RotationReason } from '../crypto/group.ts';
 import { newIdentity } from '../crypto/identity.ts';
 import type { RoomSecret } from '../crypto/secret.ts';
@@ -48,6 +50,7 @@ import {
   type VeilMessage,
 } from '../crypto/wire.ts';
 import { type HeldState, type MovieState, shouldAdopt } from '../movie/sync.ts';
+import { MeshRoom } from '../mesh/room.ts';
 import { play } from '../sfx/sounds.ts';
 import { ShareController } from '../share/controller.ts';
 import { JoinError, mediaErrorText } from './errors.ts';
@@ -88,7 +91,7 @@ export interface StageReaction {
 /**
  * A video file one person is playing for the room. The file never leaves
  * their device as a file: their browser plays it and streams the picture and
- * sound, encrypted, like a screen share. Because BraveTalk is the player,
+ * sound, encrypted, like a screen share. Because Shh VC is the player,
  * anyone in the room can pause, play and skip.
  */
 export interface FileShow {
@@ -128,7 +131,7 @@ export interface SessionOptions {
   apiBase?: string;
 }
 
-const APP_TOPIC = 'bravetalk';
+const APP_TOPIC = 'shhvc';
 const RECONCILE_INTERVAL_MS = 1500;
 const PRESENCE_INTERVAL_MS = 10_000;
 const TYPING_TTL_MS = 4000;
@@ -195,6 +198,8 @@ export class RoomSession {
   readonly movie = signal<HeldState | undefined>(undefined);
   readonly peerAudio = signal<Record<string, PeerAudio>>({});
   readonly audioBlocked = signal(false);
+  /** Serverless mode: false when no discovery relay can be reached. */
+  readonly discoveryOnline = signal(true);
   /** A file being played for the room, by us or by someone else. */
   readonly fileShow = signal<FileShow | undefined>(undefined);
   /** Set on the device that owns the file. */
@@ -204,8 +209,8 @@ export class RoomSession {
   readonly startedAt = signal<number | undefined>(undefined);
 
   private readonly group: GroupKeys;
-  private readonly keyProvider = new VeilKeyProvider();
-  private readonly signalCh: SignalChannel;
+  private readonly keyProvider = DIRECT ? undefined : new VeilKeyProvider();
+  private readonly signalCh: Pick<SignalChannel, 'connect' | 'send' | 'close'>;
   private readonly hostKey: string | undefined;
   private readonly apiBase: string;
   private worker: Worker | undefined;
@@ -237,22 +242,50 @@ export class RoomSession {
       selfIdentity: this.identity,
       displayName: this.displayName,
     });
-    this.signalCh = new SignalChannel({
-      endpoint: `${this.apiBase}/signal`,
-      roomId: opts.roomSecret.roomId,
-      identity: this.identity,
-      onMessage: (from, payload) => void this.onSignal(from, payload),
-    });
-    this.worker = new Worker(new URL('livekit-client/e2ee-worker', import.meta.url), {
-      type: 'module',
-    });
-    this.room = new Room({
-      adaptiveStream: true,
-      dynacast: true,
-      publishDefaults: cameraPublishOptions(),
-      audioCaptureDefaults: this.micConstraints(),
-      encryption: { keyProvider: this.keyProvider, worker: this.worker },
-    });
+    if (DIRECT) {
+      // No server: browsers connect to each other. Discovery is encrypted
+      // under a key derived from the room secret, so a relay cannot join.
+      const mesh = new MeshRoom({
+        identity: this.identity,
+        roomId: opts.roomSecret.roomId,
+        password: toB64Url(sha256(concat(utf8('shh-vc/v1/discovery'), opts.roomSecret.secret))),
+        relayUrls: RELAY_URLS,
+      });
+      mesh.onKeyMessage = (from, payload) => void this.onSignal(from, payload);
+      mesh.onDiscovery = (online) => {
+        this.discoveryOnline.value = online;
+      };
+      mesh.onProblem = (kind) => {
+        if (kind === 'room-full') void this.leave('failed', 'This room is full. Rooms hold six people.');
+        else if (kind === 'peer-connect-failed') {
+          toast('Could not connect to someone in this room', 'warn',
+            'One of you is on a network that blocks direct connections. A different network or a VPN usually fixes it.');
+        }
+      };
+      this.signalCh = {
+        connect: async () => undefined,
+        send: (payload) => mesh.sendKeyMessage(payload),
+        close: () => undefined,
+      };
+      this.room = mesh as unknown as Room;
+    } else {
+      this.signalCh = new SignalChannel({
+        endpoint: `${this.apiBase}/signal`,
+        roomId: opts.roomSecret.roomId,
+        identity: this.identity,
+        onMessage: (from, payload) => void this.onSignal(from, payload),
+      });
+      this.worker = new Worker(new URL('livekit-client/e2ee-worker', import.meta.url), {
+        type: 'module',
+      });
+      this.room = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+        publishDefaults: cameraPublishOptions(),
+        audioCaptureDefaults: this.micConstraints(),
+        encryption: { keyProvider: this.keyProvider!, worker: this.worker },
+      });
+    }
     this.audioHost = document.createElement('div');
     this.audioHost.dataset.btAudio = '';
     this.audioHost.hidden = true;
@@ -264,7 +297,7 @@ export class RoomSession {
   // ---- lifecycle -----------------------------------------------------
 
   async connect(): Promise<void> {
-    const grant = await this.requestToken();
+    const grant = DIRECT ? { url: '', token: '', host: false, locked: false } : await this.requestToken();
     this.isHost.value = grant.host;
     this.locked.value = grant.locked;
 
@@ -446,7 +479,7 @@ export class RoomSession {
   // ---- host controls (enforced by the server, not by courtesy) --------
 
   async hostAction(action: 'remove' | 'mute' | 'lock' | 'unlock', identity?: string): Promise<boolean> {
-    if (!this.hostKey) return false;
+    if (!this.hostKey || DIRECT) return false;
     try {
       const res = await fetch(`${this.apiBase}/host`, {
         method: 'POST',
@@ -711,7 +744,7 @@ export class RoomSession {
   }
 
   /**
-   * For a shared tab or window BraveTalk cannot press pause — the video lives
+   * For a shared tab or window Shh VC cannot press pause — the video lives
    * in another site. This asks the person sharing to do it.
    */
   nudge(kind: 'pause' | 'play'): boolean {
@@ -875,7 +908,7 @@ export class RoomSession {
   // ---- key agreement -------------------------------------------------
 
   private async applySelfKey(): Promise<void> {
-    await this.keyProvider.setParticipantKey(this.group.material, this.identity, this.group.keyIndex);
+    await this.keyProvider?.setParticipantKey(this.group.material, this.identity, this.group.keyIndex);
   }
 
   /**
@@ -949,7 +982,7 @@ export class RoomSession {
       case 'key': {
         const opened = await this.group.open(msg);
         if (!opened) return;
-        await this.keyProvider.setParticipantKey(opened.material, opened.from, opened.keyIndex);
+        await this.keyProvider?.setParticipantKey(opened.material, opened.from, opened.keyIndex);
         const first = !this.keyedPeers.has(opened.from);
         this.keyedPeers.add(opened.from);
         if (first) {

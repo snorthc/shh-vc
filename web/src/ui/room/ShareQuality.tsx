@@ -1,3 +1,4 @@
+import { DIRECT } from '../../app/mode.ts';
 import { settings, updateSettings } from '../../app/settings.ts';
 import {
   BITRATE_LEVELS,
@@ -112,8 +113,8 @@ export function ShareQuality(props: { onChange?: () => void; compact?: boolean }
           {describeQuality(resolved)}
         </span>
         <span>
-          {' '}
-          · {resolved.codec.toUpperCase()}
+          {/* In direct mode the browsers negotiate the codec; diagnostics show which. */}
+          {!DIRECT && ` · ${resolved.codec.toUpperCase()}`}
           {s.sharePreset === 'custom' && s.shareCustom.bitrate === 'adaptive' && ' · adapts to the network'}
         </span>
       </p>

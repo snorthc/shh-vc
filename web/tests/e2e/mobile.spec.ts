@@ -170,8 +170,9 @@ for (const phone of PHONES) {
       await m.page.keyboard.press('Escape');
 
       // Watching someone else's share on a phone
-      await desk.page.keyboard.press('Escape');
-      await desk.page.getByTestId('panel-close').click();
+      // Make sure the desktop's side panel is fully closed before using its dock.
+      await desk.page.evaluate(() => (document.querySelector('[data-testid="panel-close"]') as HTMLElement | null)?.click());
+      await expect.poll(() => desk.page.locator('.panel').count(), { timeout: 5000 }).toBe(0);
       await desk.page.getByTestId('share').click();
       await desk.page.getByTestId('share-confirm').click();
       await m.page.getByTestId('screen-tile').waitFor({ timeout: 30_000 });

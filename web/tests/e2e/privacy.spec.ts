@@ -3,7 +3,7 @@
  * These need no media server: the token call is stubbed and recorded.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type Harness, newClient, startHarness } from './harness.ts';
+import { DIRECT, type Harness, newClient, startHarness } from './harness.ts';
 
 /** A fixed, deliberately public 32-byte secret: 43 base64url chars. */
 const SECRET = 'DRQbIikwNz5FTFNaYWhvdn2Ei5KZoKeutbzDytHY3-Y';
@@ -41,7 +41,8 @@ async function attemptJoin(c: Awaited<ReturnType<typeof open>>, name: string) {
   return { req, body: JSON.parse(req.body ?? '{}') as Record<string, string> };
 }
 
-describe('the room secret never leaves the browser', () => {
+// These check the token service; the serverless build has its own privacy spec.
+describe.skipIf(DIRECT)('the room secret never leaves the browser', () => {
   it('sends a hashed room id and a random identity, never the secret or a name', async () => {
     const c = await open(`#k=${SECRET}`);
     const { req, body } = await attemptJoin(c, 'Tester McTest');
@@ -118,7 +119,7 @@ describe('landing', () => {
   it('states plainly what is and is not hidden', async () => {
     const c = await open('');
     const text = (await c.page.locator('#app').innerText()).toLowerCase();
-    expect(text).toContain('the server does see your ip address');
+    expect(text).toContain(DIRECT ? 'people in the same room can see each other’s ip address' : 'the server does see your ip address');
     expect(text).toContain('anyone with the link can join');
     await c.ctx.close();
   }, 60_000);
@@ -127,9 +128,9 @@ describe('landing', () => {
     const c = await open('');
     await c.page.getByLabel('Invite link').fill('hello there');
     await c.page.getByRole('button', { name: 'Join' }).click();
-    await c.page.getByText('does not look like a BraveTalk invite link').waitFor();
+    await c.page.getByText('does not look like a Shh VC invite link').waitFor();
     await c.page.getByLabel('Invite link').fill(`https://example.org/#k=${SECRET}`);
-    await c.page.getByRole('button', { name: 'Join' }).click();
+    await c.page.getByRole('button', { name: 'Join', exact: true }).click();
     await c.page.getByText('Ready to join?').waitFor();
     await c.ctx.close();
   }, 60_000);

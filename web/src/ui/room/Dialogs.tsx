@@ -119,7 +119,7 @@ export function WatchDialog(props: {
               <label for="movie-url">A link to a video file</label>
             </h3>
             <p>
-              A direct link to an MP4 or WebM. Each person’s browser loads it and BraveTalk keeps
+              A direct link to an MP4 or WebM. Each person’s browser loads it and Shh VC keeps
               everyone at the same moment. <strong>Everyone can pause, play and skip.</strong>
             </p>
             <div class="invite-row">

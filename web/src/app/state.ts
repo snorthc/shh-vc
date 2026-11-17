@@ -11,6 +11,7 @@ import {
   type RoomSecret,
   SECRET_BYTES,
 } from '../crypto/secret.ts';
+import { DIRECT } from './mode.ts';
 import { settings } from './settings.ts';
 import { describeError } from './util.ts';
 
@@ -129,7 +130,8 @@ export function boot(): void {
 export function startNewRoom(): void {
   const room: PendingRoom = {
     secret: newRoomSecret(),
-    hostKey: toB64Url(randomBytes(24)),
+    // Host controls need a server to enforce them; without one there is no host.
+    hostKey: DIRECT ? undefined : toB64Url(randomBytes(24)),
     created: true,
   };
   pending.value = room;
@@ -224,5 +226,5 @@ if (typeof window !== 'undefined') {
     boot();
   });
   // Handle for end-to-end tests and for debugging from the console.
-  (window as unknown as { __bt?: unknown }).__bt = { session, view, settings };
+  (window as unknown as { __shh?: unknown }).__shh = { session, view, settings };
 }

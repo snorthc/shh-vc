@@ -1,7 +1,7 @@
 /**
  * Watch-together playback sync.
  *
- * This only applies to a video BraveTalk plays itself: a direct link to a
+ * This only applies to a video Shh VC plays itself: a direct link to a
  * media file that every participant loads in their own browser. Play, pause
  * and seek are shared over the encrypted data channel and each client corrects
  * its own drift. It cannot control Netflix, YouTube or any other site's
@@ -83,7 +83,7 @@ export function checkMovieUrl(input: string, pageIsHttps: boolean): UrlCheck {
     return {
       ok: false,
       reason:
-        'BraveTalk cannot control that site’s player. Share the tab instead and everyone will see it.',
+        'Shh VC cannot control that site’s player. Share the tab instead and everyone will see it.',
     };
   }
   return { ok: true, url: url.toString() };

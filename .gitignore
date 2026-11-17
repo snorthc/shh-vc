@@ -3,3 +3,5 @@ dist/
 *.log
 .env
 .env.*
+dist-direct-test/
+dist-pages/

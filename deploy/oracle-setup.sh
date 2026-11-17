@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Provision a Veil node on an Oracle Cloud "Always Free" ARM instance.
+# Provision a Shh VC node on an Oracle Cloud "Always Free" ARM instance.
 #
 #   Shape:  VM.Standard.A1.Flex — 4 OCPU / 24 GB RAM (the whole free ARM quota)
 #   Egress: 10 TB/month included, which is the only reason this is free
@@ -47,11 +47,11 @@ install -m 0755 "$tmp/livekit-server" /usr/local/bin/livekit-server
 rm -rf "$tmp"
 
 echo "==> keys"
-mkdir -p /etc/veil
-if [ ! -f /etc/veil/livekit.env ]; then
+mkdir -p /etc/shh-vc
+if [ ! -f /etc/shh-vc/livekit.env ]; then
   API_KEY="$(head -c 12 /dev/urandom | base64 | tr -d '/+=' )"
   API_SECRET="$(head -c 32 /dev/urandom | base64 | tr -d '/+=' )"
-  cat > /etc/veil/livekit.env <<ENV
+  cat > /etc/shh-vc/livekit.env <<ENV
 LIVEKIT_API_KEY=${API_KEY}
 LIVEKIT_API_SECRET=${API_SECRET}
 LIVEKIT_HOST_URL=http://127.0.0.1:7880
@@ -59,11 +59,11 @@ PUBLIC_WS_URL=wss://${SFU_DOMAIN}
 MAX_PARTICIPANTS=6
 ALLOWED_ORIGINS=https://${DOMAIN}
 ENV
-  chmod 0600 /etc/veil/livekit.env
-  echo "    generated new API key/secret in /etc/veil/livekit.env"
+  chmod 0600 /etc/shh-vc/livekit.env
+  echo "    generated new API key/secret in /etc/shh-vc/livekit.env"
 fi
 # shellcheck disable=SC1091
-. /etc/veil/livekit.env
+. /etc/shh-vc/livekit.env
 
 echo "==> livekit config"
 install -d /etc/livekit
@@ -96,15 +96,15 @@ ReadWritePaths=/etc/livekit
 WantedBy=multi-user.target
 UNIT
 
-cat > /etc/systemd/system/veil-token.service <<'UNIT'
+cat > /etc/systemd/system/shh-vc-token.service <<'UNIT'
 [Unit]
-Description=Veil token service
+Description=Shh VC token service
 After=livekit.service
 Wants=livekit.service
 
 [Service]
-WorkingDirectory=/srv/veil-src/server
-EnvironmentFile=/etc/veil/livekit.env
+WorkingDirectory=/srv/shh-vc-src/server
+EnvironmentFile=/etc/shh-vc/livekit.env
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/node --experimental-strip-types src/index.ts
 Restart=on-failure
@@ -153,13 +153,13 @@ cat <<DONE
        ${SFU_DOMAIN}  A  <this instance's public IP>
 
   3. Deploy the app:
-       git clone <your repo> /srv/veil-src
-       cd /srv/veil-src && npm ci && npm run build
-       install -d /srv/veil && cp -r web/dist/* /srv/veil/
+       git clone <your repo> /srv/shh-vc-src
+       cd /srv/shh-vc-src && npm ci && npm run build
+       install -d /srv/shh-vc && cp -r web/dist/* /srv/shh-vc/
        cp deploy/Caddyfile /etc/caddy/Caddyfile
        sed -i "s/talk.example.com/${DOMAIN}/; s/sfu.example.com/${SFU_DOMAIN}/" /etc/caddy/Caddyfile
        systemctl reload caddy
-       systemctl enable --now veil-token.service
+       systemctl enable --now shh-vc-token.service
 
   4. Give LiveKit's TURN its certificates (Caddy already fetched them):
        install -d /etc/livekit/turn

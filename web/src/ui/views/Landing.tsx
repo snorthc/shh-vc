@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { ArrowRight, Check, Eye, Film, Lock, Minus, Settings as SettingsIcon } from 'lucide-preact';
+import { DIRECT } from '../../app/mode.ts';
 import { openInvite, startNewRoom } from '../../app/state.ts';
 import { Button, IconButton, Mark } from '../components/primitives.tsx';
 import { SettingsDialog } from '../room/SettingsDialog.tsx';
@@ -21,15 +22,15 @@ export function Landing() {
       setError('Paste the invite link you were sent.');
       return;
     }
-    if (!openInvite(link)) setError('That does not look like a BraveTalk invite link.');
+    if (!openInvite(link)) setError('That does not look like a Shh VC invite link.');
   };
 
   return (
     <div class="landing view">
       <header class="landing-nav">
-        <a class="wordmark" href="./" aria-label="BraveTalk">
+        <a class="wordmark" href="./" aria-label="Shh VC">
           <Mark />
-          <span>BraveTalk</span>
+          <span>Shh VC</span>
         </a>
         <IconButton label="Settings" tipPos="left" onClick={() => setSettingsOpen(true)}>
           <SettingsIcon />
@@ -86,12 +87,12 @@ export function Landing() {
           <SharePreviewFigure />
         </section>
 
-        <section class="points" aria-label="What BraveTalk does">
+        <section class="points" aria-label="What Shh VC does">
           <article>
             <Eye />
             <h2>See it before they do</h2>
             <p>
-              Pick a screen, window or tab and BraveTalk shows you exactly what will be shared. Nothing
+              Pick a screen, window or tab and Shh VC shows you exactly what will be shared. Nothing
               leaves your device until you press Start sharing.
             </p>
           </article>
@@ -99,8 +100,9 @@ export function Landing() {
             <Lock />
             <h2>Encrypted end to end</h2>
             <p>
-              Voice, video, screen shares and chat are encrypted in your browser with keys the server
-              never holds. It relays bytes it cannot read.
+              {DIRECT
+                ? 'Calls, shares and chat go straight from browser to browser, encrypted the whole way. There is no server in the middle to read them.'
+                : 'Voice, video, screen shares and chat are encrypted in your browser with keys the server never holds. It relays bytes it cannot read.'}
             </p>
           </article>
           <article>
@@ -115,34 +117,69 @@ export function Landing() {
 
         <section class="honesty" aria-labelledby="honesty-title">
           <h2 id="honesty-title">What it hides, and what it does not</h2>
-          <div class="honesty-cols">
-            <ul>
-              <li>
-                <Check class="yes" />
-                Other people in the room never see your IP address.
-              </li>
-              <li>
-                <Check class="yes" />
-                The server cannot read your calls, shares or messages.
-              </li>
-              <li>
-                <Check class="yes" />
-                No account, no email, and nothing kept when the room ends.
-              </li>
-            </ul>
-            <ul>
-              <li>
-                <Minus class="no" />
-                The server does see your IP address, and who is in a room together and when. Use a
-                VPN if that matters to you.
-              </li>
-              <li>
-                <Minus class="no" />
-                Anyone with the link can join. Treat it like a password, and lock the room once
-                everyone is in.
-              </li>
-            </ul>
-          </div>
+          {DIRECT ? (
+            <div class="honesty-cols">
+              <ul>
+                <li>
+                  <Check class="yes" />
+                  Nobody in between can read your calls, shares or messages.
+                </li>
+                <li>
+                  <Check class="yes" />
+                  There is no server holding your room. Browsers connect to each other.
+                </li>
+                <li>
+                  <Check class="yes" />
+                  No account, no email, and nothing kept when the room ends.
+                </li>
+              </ul>
+              <ul>
+                <li>
+                  <Minus class="no" />
+                  People in the same room can see each other’s IP address, because your browsers
+                  connect directly. Use a VPN if that matters to you.
+                </li>
+                <li>
+                  <Minus class="no" />
+                  The public relays that introduce browsers to each other see your IP address too,
+                  but not what is said or shared.
+                </li>
+                <li>
+                  <Minus class="no" />
+                  Anyone with the link can join. Treat it like a password.
+                </li>
+              </ul>
+            </div>
+          ) : (
+            <div class="honesty-cols">
+              <ul>
+                <li>
+                  <Check class="yes" />
+                  Other people in the room never see your IP address.
+                </li>
+                <li>
+                  <Check class="yes" />
+                  The server cannot read your calls, shares or messages.
+                </li>
+                <li>
+                  <Check class="yes" />
+                  No account, no email, and nothing kept when the room ends.
+                </li>
+              </ul>
+              <ul>
+                <li>
+                  <Minus class="no" />
+                  The server does see your IP address, and who is in a room together and when. Use a
+                  VPN if that matters to you.
+                </li>
+                <li>
+                  <Minus class="no" />
+                  Anyone with the link can join. Treat it like a password, and lock the room once
+                  everyone is in.
+                </li>
+              </ul>
+            </div>
+          )}
         </section>
       </main>
 

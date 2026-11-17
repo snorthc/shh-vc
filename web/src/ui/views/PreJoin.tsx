@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { ArrowLeft, Check, Copy, Lock, Mic, MicOff, Settings as SettingsIcon, Video, VideoOff } from 'lucide-preact';
+import { DIRECT } from '../../app/mode.ts';
 import { settings, updateSettings } from '../../app/settings.ts';
 import { backToStart, inviteLink, join, joinError, pending, preloadRoom, view } from '../../app/state.ts';
 import { mediaErrorText } from '../../call/errors.ts';
@@ -145,7 +146,7 @@ export function PreJoin() {
         </IconButton>
         <span class="wordmark">
           <Mark />
-          <span>BraveTalk</span>
+          <span>Shh VC</span>
         </span>
         <IconButton label="Settings" tipPos="left" onClick={() => setSettingsOpen(true)}>
           <SettingsIcon />
@@ -203,7 +204,9 @@ export function PreJoin() {
           <h1>{room.created ? 'Your room is ready' : 'Ready to join?'}</h1>
           <p class="lede">
             {room.created
-              ? 'Send the link to the people you want here. You are the host: you can lock the room and remove people.'
+              ? isHost
+                ? 'Send the link to the people you want here. You are the host: you can lock the room and remove people.'
+                : 'Send the link to the people you want here, then come in.'
               : 'Check how you look and sound, then come in.'}
           </p>
 
@@ -231,7 +234,7 @@ export function PreJoin() {
             {nameError && <span class="field-error">Enter a name so people know who you are.</span>}
           </div>
 
-          {isHost && (
+          {room.created && (
             <div class="field">
               <span class="label">Invite link</span>
               <div class="invite-row">
@@ -257,7 +260,9 @@ export function PreJoin() {
 
           <p class="secure-line">
             <Lock />
-            End-to-end encrypted. The server relays media it cannot read.
+            {DIRECT
+              ? 'End-to-end encrypted, browser to browser. People in the room can see each other’s IP address.'
+              : 'End-to-end encrypted. The server relays media it cannot read.'}
           </p>
         </form>
       </div>

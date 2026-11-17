@@ -4,7 +4,7 @@
  */
 import type { Page } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type Client, freshSecret, type Harness, HOST_KEY, joinRoom, newClient, stackReachable, startHarness } from './harness.ts';
+import { type Client, DIRECT, freshSecret, type Harness, HOST_KEY, joinRoom, newClient, stackReachable, startHarness } from './harness.ts';
 
 let h: Harness;
 beforeAll(async () => {
@@ -23,7 +23,7 @@ const frames = (page: Page, selector: string) =>
   }, selector);
 
 const peerCount = (page: Page) => page.locator('[data-testid="tile-peer"]').count();
-const sess = <T>(page: Page, fn: string) => page.evaluate(`(() => { const s = window.__bt.session.value; return (${fn})(s); })()`) as Promise<T>;
+const sess = <T>(page: Page, fn: string) => page.evaluate(`(() => { const s = window.__shh.session.value; return (${fn})(s); })()`) as Promise<T>;
 
 async function openChat(...cs: Client[]) {
   for (const c of cs) {
@@ -95,12 +95,13 @@ describe('calls', () => {
     await closeAll(a, b);
   }, 120_000);
 
-  it('recovers from a dropped signalling connection', async () => {
+  // There is no signalling server to drop in the serverless build.
+  it.skipIf(DIRECT)('recovers from a dropped signalling connection', async () => {
     const secret = freshSecret();
     const a = await joinRoom(h, secret, 'Alice');
     const b = await joinRoom(h, secret, 'Bob');
     await settled(a, b);
-    await a.page.evaluate('window.__bt.session.value.room.simulateScenario("signal-reconnect")');
+    await a.page.evaluate('window.__shh.session.value.room.simulateScenario("signal-reconnect")');
     await a.page.locator('[data-testid="room"][data-status="connected"]').waitFor({ timeout: 30_000 });
     await openChat(a, b);
     await say(a, 'still here after reconnecting');
@@ -300,7 +301,7 @@ describe('screen sharing', () => {
     // Cancel: the capture itself is stopped, not just hidden.
     const live = () => sess<string>(a.page, 's => (s.share.previewStream.value ? "live" : "none")');
     expect(await live()).toBe('live');
-    await a.page.evaluate('window.__capture = window.__bt.session.value.share.previewStream.value');
+    await a.page.evaluate('window.__capture = window.__shh.session.value.share.previewStream.value');
     await a.page.getByTestId('share-cancel').click();
     await expect.poll(() => a.page.getByTestId('share-dialog').count()).toBe(0);
     expect(await a.page.evaluate('window.__capture.getTracks().every(t => t.readyState === "ended")')).toBe(true);
@@ -507,7 +508,7 @@ describe('shared controls for what you are watching', () => {
     await settled(a, b);
     // A share that carries sound is the sign that someone is watching something.
     await a.page.evaluate(async () => {
-      const s = (window as unknown as { __bt: { session: { value: { room: { localParticipant: { publishTrack(t: MediaStreamTrack, o: unknown): Promise<unknown> } } } } } }).__bt.session.value;
+      const s = (window as unknown as { __shh: { session: { value: { room: { localParticipant: { publishTrack(t: MediaStreamTrack, o: unknown): Promise<unknown> } } } } } }).__shh.session.value;
       const ctx = new AudioContext();
       const dest = ctx.createMediaStreamDestination();
       ctx.createOscillator().connect(dest);
@@ -517,7 +518,7 @@ describe('shared controls for what you are watching', () => {
     await a.page.getByTestId('share').click();
     await a.page.getByTestId('share-confirm').click();
     await a.page.getByTestId('share-live-chip').waitFor({ timeout: 30_000 });
-    await a.page.evaluate('window.__bt.session.value.room.localParticipant.publishTrack(window.__tone, { source: "screen_share_audio", name: "screen-audio" })');
+    await a.page.evaluate('window.__shh.session.value.room.localParticipant.publishTrack(window.__tone, { source: "screen_share_audio", name: "screen-audio" })');
 
     await b.page.getByTestId('ask-pause').waitFor({ timeout: 30_000 });
     await b.page.getByTestId('ask-pause').click();
@@ -528,7 +529,8 @@ describe('shared controls for what you are watching', () => {
   }, 180_000);
 });
 
-describe('host controls', () => {
+// Host controls are enforced by a server; the serverless build has none and offers none.
+describe.skipIf(DIRECT)('host controls', () => {
   it('lets the host mute, remove and lock — enforced by the server', async () => {
     const secret = freshSecret();
     const hostKey = HOST_KEY + Math.random().toString(36).slice(2, 8);
@@ -606,7 +608,7 @@ describe('sounds and settings', () => {
     await a.page.getByTestId('deafen').click();
     await a.page.getByTestId('mic').click();
     expect((await played()).played).toBe(silent);
-    expect(await a.page.evaluate(() => JSON.parse(localStorage.getItem('bravetalk.settings.v1')!).sfxEnabled)).toBe(false);
+    expect(await a.page.evaluate(() => JSON.parse(localStorage.getItem('shhvc.settings.v1')!).sfxEnabled)).toBe(false);
     await closeAll(a);
   }, 120_000);
 

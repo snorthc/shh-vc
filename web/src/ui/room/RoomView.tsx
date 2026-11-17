@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
   Check, Clapperboard, Ellipsis, Headphones, HeadphoneOff, Keyboard, Link2, Lock, LockOpen, Maximize, MessageSquare, Mic, MicOff,
-  Minimize, MonitorUp, PhoneOff, Settings as SettingsIcon, ShieldCheck, Smile, Users, Video, VideoOff, VolumeX, X,
+  Minimize, MonitorUp, PhoneOff, Settings as SettingsIcon, ShieldCheck, Smile, Users, Video, VideoOff, VolumeX, WifiOff, X,
 } from 'lucide-preact';
 import { type LayoutMode, settings, updateSettings } from '../../app/settings.ts';
 import { inviteLink, leaveRoom } from '../../app/state.ts';
@@ -307,6 +307,16 @@ export function RoomView(props: { session: RoomSession }) {
                 <strong>Sound is paused by your browser.</strong> Click to hear the room.
               </span>
             </button>
+          )}
+          {!session.discoveryOnline.value && (
+            <div class="banner warn" role="status" data-testid="discovery-offline">
+              <WifiOff />
+              <span>
+                <strong>Nobody can find this room right now.</strong> The public relays that introduce
+                browsers to each other are out of reach. People already here stay connected. Check
+                your connection, or try another network or a VPN.
+              </span>
+            </div>
           )}
           {status === 'reconnecting' && (
             <div class="banner warn" role="status">

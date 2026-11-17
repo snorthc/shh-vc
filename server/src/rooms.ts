@@ -19,7 +19,7 @@ export interface RoomRecord {
 const HOST_KEY = /^[A-Za-z0-9_-]{22,64}$/;
 
 function digest(hostKey: string): Buffer {
-  return createHash('sha256').update(`bravetalk/host/${hostKey}`).digest();
+  return createHash('sha256').update(`shhvc/host/${hostKey}`).digest();
 }
 
 export class RoomRegistry {

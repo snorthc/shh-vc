@@ -1,4 +1,4 @@
-# BraveTalk — invariants
+# Shh VC — invariants
 
 Read this before changing anything. If a change breaks one of these it is a
 bug, even if every test passes.
@@ -61,7 +61,7 @@ bug, even if every test passes.
 
 ## Watching together
 
-18. BraveTalk can control playback only when BraveTalk is the player: a video
+18. Shh VC can control playback only when Shh VC is the player: a video
     **link** (each client plays it) or a **file** (one device plays and streams
     it). For those, every participant's pause, play and skip must work.
 19. For a shared tab, only the sharer can press pause. Viewers get "Ask to
@@ -87,6 +87,18 @@ bug, even if every test passes.
 25. No fake participants, messages, statistics or states — including in
     marketing imagery. The hero illustration is a drawing and is hidden from
     assistive technology.
+
+## Serverless mode (`VITE_TRANSPORT=direct`)
+
+27. Browsers connect directly. **People in a room can see each other's IP
+    address**, and the UI must say so on the landing page and before joining.
+    Never reuse the relay build's "nobody sees your IP" copy here.
+28. Discovery goes through public relays under a key derived from the room
+    secret. Nothing sent to a relay may contain the secret, the room id, a
+    name, a message or readable SDP. `tests/e2e/direct.spec.ts` checks this.
+29. There is no server, so there are **no host controls**. Do not render
+    lock, remove or mute-for-everyone in this mode.
+30. If no relay is reachable the room must say that nobody can find it.
 
 ## Cost
 

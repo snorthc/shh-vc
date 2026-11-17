@@ -7,7 +7,7 @@ import { IconButton, Slider } from '../components/primitives.tsx';
 
 /**
  * Synchronised playback of a direct video link. Each person loads the file
- * themselves; BraveTalk shares only play, pause and position, and nudges each
+ * themselves; Shh VC shares only play, pause and position, and nudges each
  * player back into line when it drifts.
  */
 export function MoviePlayer(props: { session: RoomSession; children?: preact.ComponentChildren }) {

@@ -1,5 +1,5 @@
 {
-  "name": "@veil/server",
+  "name": "@shh-vc/server",
   "private": true,
   "version": "0.1.0",
   "type": "module",

@@ -9,8 +9,17 @@ import { connect as netConnect } from 'node:net';
 import { extname, join as pathJoin, normalize } from 'node:path';
 import { type Browser, type BrowserContext, chromium, type Page } from 'playwright';
 
+import { startRelay } from './relay.ts';
+
 const ROOT = pathJoin(import.meta.dirname, '../..');
-const DIST = pathJoin(ROOT, 'dist');
+/**
+ * E2E_MODE=direct tests the serverless build (browser-to-browser, discovery
+ * through a local Nostr relay). The default tests the self-hosted build
+ * against LiveKit and the token service.
+ */
+export const DIRECT = process.env.E2E_MODE === 'direct';
+export const RELAY_PORT = 7447;
+const DIST = pathJoin(ROOT, DIRECT ? 'dist-direct-test' : 'dist');
 const FIXTURES = pathJoin(ROOT, 'tests/fixtures');
 const API = { host: '127.0.0.1', port: 8787 };
 
@@ -30,6 +39,7 @@ export interface Harness {
 }
 
 export async function stackReachable(): Promise<boolean> {
+  if (DIRECT) return true; // the serverless build needs no stack
   const ok = async (url: string) => {
     try {
       return (await fetch(url, { signal: AbortSignal.timeout(3000) })).status < 500;
@@ -62,7 +72,8 @@ function serveFile(path: string, req: import('node:http').IncomingMessage, res: 
 }
 
 export async function startHarness(opts: { tabCaptureTitle?: string; stubApi?: boolean } = {}): Promise<Harness> {
-  if (!existsSync(pathJoin(DIST, 'index.html'))) throw new Error('build first: npm run build --workspace=web');
+  if (!existsSync(pathJoin(DIST, 'index.html'))) throw new Error(`build first: no ${DIST}`);
+  const relay = DIRECT ? startRelay(RELAY_PORT) : undefined;
 
   const server: Server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -139,6 +150,7 @@ export async function startHarness(opts: { tabCaptureTitle?: string; stubApi?: b
     browser,
     async close() {
       await browser.close();
+      await relay?.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },
   };
