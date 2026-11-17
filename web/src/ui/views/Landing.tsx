@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { ArrowRight, Check, Eye, Film, Lock, Minus, Settings as SettingsIcon } from 'lucide-preact';
-import { DIRECT } from '../../app/mode.ts';
+import { DIRECT, FROM_FILE } from '../../app/mode.ts';
 import { openInvite, startNewRoom } from '../../app/state.ts';
 import { Button, IconButton, Mark } from '../components/primitives.tsx';
 import { SettingsDialog } from '../room/SettingsDialog.tsx';
@@ -19,10 +19,10 @@ export function Landing() {
   const submit = (e: Event) => {
     e.preventDefault();
     if (!link.trim()) {
-      setError('Paste the invite link you were sent.');
+      setError(FROM_FILE ? 'Paste the room code you were sent.' : 'Paste the invite link you were sent.');
       return;
     }
-    if (!openInvite(link)) setError('That does not look like a Shh VC invite link.');
+    if (!openInvite(link)) setError(FROM_FILE ? 'That does not look like a Shh VC room code.' : 'That does not look like a Shh VC invite link.');
   };
 
   return (
@@ -42,8 +42,9 @@ export function Landing() {
           <div class="hero-copy">
             <h1>Talk, share your screen, and watch together.</h1>
             <p class="lede">
-              Private rooms for up to six people. No account and nothing to install. Start a room,
-              send the link, and you are talking.
+              {FROM_FILE
+                ? 'Private rooms for up to six people. No account, no website, nothing to install. Start a room, send the code, and you are talking.'
+                : 'Private rooms for up to six people. No account and nothing to install. Start a room, send the link, and you are talking.'}
             </p>
 
             <div class="hero-actions">
@@ -53,7 +54,7 @@ export function Landing() {
               </Button>
               <form class="join-form" onSubmit={submit} novalidate>
                 <label class="sr-only" for="invite">
-                  Invite link
+                  {FROM_FILE ? 'Room code' : 'Invite link'}
                 </label>
                 <input
                   id="invite"
@@ -63,7 +64,7 @@ export function Landing() {
                   autocomplete="off"
                   autocapitalize="off"
                   spellcheck={false}
-                  placeholder="Or paste an invite link"
+                  placeholder={FROM_FILE ? 'Or paste a room code' : 'Or paste an invite link'}
                   value={link}
                   aria-invalid={error ? 'true' : undefined}
                   aria-describedby={error ? 'invite-error' : undefined}

@@ -3,6 +3,7 @@ import {
   Check, Clapperboard, Ellipsis, Headphones, HeadphoneOff, Keyboard, Link2, Lock, LockOpen, Maximize, MessageSquare, Mic, MicOff,
   Minimize, MonitorUp, PhoneOff, Settings as SettingsIcon, ShieldCheck, Smile, Users, Video, VideoOff, VolumeX, WifiOff, X,
 } from 'lucide-preact';
+import { FROM_FILE } from '../../app/mode.ts';
 import { type LayoutMode, settings, updateSettings } from '../../app/settings.ts';
 import { inviteLink, leaveRoom } from '../../app/state.ts';
 import { formatDuration } from '../../app/util.ts';
@@ -270,7 +271,7 @@ export function RoomView(props: { session: RoomSession }) {
           )}
           <Button size="sm" onClick={copyInvite} data-testid="invite">
             {copied ? <Check /> : <Link2 />}
-            <span class="hide-narrow">{copied ? 'Link copied' : 'Invite'}</span>
+            <span class="hide-narrow">{copied ? (FROM_FILE ? 'Code copied' : 'Link copied') : 'Invite'}</span>
           </Button>
           {mobile && (
             <Button size="sm" variant="danger" onClick={() => void leaveRoom()} data-testid="leave">

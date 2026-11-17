@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { ArrowLeft, Check, Copy, Lock, Mic, MicOff, Settings as SettingsIcon, Video, VideoOff } from 'lucide-preact';
-import { DIRECT } from '../../app/mode.ts';
+import { DIRECT, FROM_FILE } from '../../app/mode.ts';
 import { settings, updateSettings } from '../../app/settings.ts';
 import { backToStart, inviteLink, join, joinError, pending, preloadRoom, view } from '../../app/state.ts';
 import { mediaErrorText } from '../../call/errors.ts';
@@ -206,7 +206,9 @@ export function PreJoin() {
             {room.created
               ? isHost
                 ? 'Send the link to the people you want here. You are the host: you can lock the room and remove people.'
-                : 'Send the link to the people you want here, then come in.'
+                : FROM_FILE
+                  ? 'Send this room code to the people you want here, along with the Shh VC file. They open the file and paste the code.'
+                  : 'Send the link to the people you want here, then come in.'
               : 'Check how you look and sound, then come in.'}
           </p>
 
@@ -236,15 +238,15 @@ export function PreJoin() {
 
           {room.created && (
             <div class="field">
-              <span class="label">Invite link</span>
+              <span class="label">{FROM_FILE ? 'Room code' : 'Invite link'}</span>
               <div class="invite-row">
-                <input class="input mono" type="text" readOnly value={inviteLink(room.secret)} aria-label="Invite link" onFocus={(e) => (e.target as HTMLInputElement).select()} />
+                <input class="input mono" type="text" readOnly value={inviteLink(room.secret)} aria-label={FROM_FILE ? 'Room code' : 'Invite link'} onFocus={(e) => (e.target as HTMLInputElement).select()} />
                 <Button onClick={copy} aria-live="polite">
                   {copied ? <Check /> : <Copy />}
                   {copied ? 'Copied' : 'Copy'}
                 </Button>
               </div>
-              <span class="hint">The link is the key to the room. Send it somewhere private.</span>
+              <span class="hint">{FROM_FILE ? 'The code is the key to the room. Send it somewhere private.' : 'The link is the key to the room. Send it somewhere private.'}</span>
             </div>
           )}
 

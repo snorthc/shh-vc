@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "build:direct": "VITE_TRANSPORT=direct vite build --base ./ --outDir dist-pages",
     "build:direct-test": "VITE_TRANSPORT=direct VITE_RELAYS=ws://127.0.0.1:7447 vite build --outDir dist-direct-test",
-    "test:e2e:direct": "npm run build:direct-test && E2E_MODE=direct vitest run --config vitest.e2e.config.ts"
+    "test:e2e:direct": "npm run build:direct-test && E2E_MODE=direct vitest run --config vitest.e2e.config.ts",
+    "build:file": "VITE_TRANSPORT=direct VITE_SINGLEFILE=1 vite build --base ./ --outDir dist-file",
+    "build:file-test": "VITE_TRANSPORT=direct VITE_SINGLEFILE=1 VITE_RELAYS=ws://127.0.0.1:7447 vite build --base ./ --outDir dist-file-test"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
@@ -30,6 +32,7 @@
     "playwright": "^1.63.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.11",
+    "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^3.0.5"
   }
 }

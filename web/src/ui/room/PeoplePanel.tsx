@@ -1,5 +1,6 @@
 import { useRef, useState } from 'preact/hooks';
 import { Check, Copy, EllipsisVertical, HeadphoneOff, Lock, LockOpen, MicOff, MonitorUp, ShieldEllipsis, SignalLow, UserMinus, VolumeX, Volume2 } from 'lucide-preact';
+import { FROM_FILE } from '../../app/mode.ts';
 import { inviteLink } from '../../app/state.ts';
 import type { ParticipantView, RoomSession } from '../../call/session.ts';
 import { MenuItem, Popover } from '../components/Popover.tsx';
@@ -142,7 +143,7 @@ export function PeoplePanel(props: { session: RoomSession }) {
         )}
         <Button block onClick={copy} disabled={locked && !host}>
           {copied ? <Check /> : locked ? <LockOpen /> : <Copy />}
-          {copied ? 'Invite link copied' : 'Copy invite link'}
+          {FROM_FILE ? (copied ? 'Room code copied' : 'Copy room code') : copied ? 'Invite link copied' : 'Copy invite link'}
         </Button>
       </div>
     </div>

@@ -1,5 +1,9 @@
 import preact from '@preact/preset-vite';
 import { defineConfig } from 'vite';
+import { viteSingleFile } from 'vite-plugin-singlefile';
+
+/** One self-contained HTML file that runs when opened from disk: no host at all. */
+const SINGLE = process.env.VITE_SINGLEFILE === '1';
 
 /**
  * A static host such as GitHub Pages cannot send security headers, so the
@@ -10,7 +14,8 @@ import { defineConfig } from 'vite';
 const pagePolicy = {
   name: 'shh-page-policy',
   transformIndexHtml(html: string) {
-    if (process.env.VITE_TRANSPORT !== 'direct') return html;
+    // A file opened from disk has no origin for 'self' to mean anything.
+    if (process.env.VITE_TRANSPORT !== 'direct' || SINGLE) return html;
     const csp = [
       "default-src 'self'",
       "script-src 'self'",
@@ -29,8 +34,10 @@ const pagePolicy = {
 
 export default defineConfig({
   // The room secret lives in the URL fragment and must never be sent to a server.
-  plugins: [preact(), pagePolicy],
-  build: { target: 'es2022', sourcemap: true },
+  plugins: [preact(), pagePolicy, ...(SINGLE ? [viteSingleFile({ removeViteModuleLoader: true })] : [])],
+  build: SINGLE
+    ? { target: 'es2022', sourcemap: false, assetsInlineLimit: 100_000_000, cssCodeSplit: false }
+    : { target: 'es2022', sourcemap: true },
   server: {
     port: 5173,
     strictPort: true,

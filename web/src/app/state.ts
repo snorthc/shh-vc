@@ -11,7 +11,7 @@ import {
   type RoomSecret,
   SECRET_BYTES,
 } from '../crypto/secret.ts';
-import { DIRECT } from './mode.ts';
+import { DIRECT, FROM_FILE } from './mode.ts';
 import { settings } from './settings.ts';
 import { describeError } from './util.ts';
 
@@ -102,7 +102,12 @@ function writeFragment(room: PendingRoom | undefined): void {
   history.replaceState(null, '', room ? url.toString() : url.pathname + url.search);
 }
 
+/**
+ * What you send someone to bring them into the room: a link when the app is
+ * on a website, or a room code when it was opened as a file.
+ */
 export function inviteLink(secret: RoomSecret): string {
+  if (FROM_FILE) return toB64Url(secret.secret);
   return joinLink(location.origin + location.pathname.replace(/\/$/, ''), secret);
 }
 

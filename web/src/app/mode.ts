@@ -18,3 +18,9 @@ export const RELAY_URLS: string[] = String(import.meta.env.VITE_RELAYS ?? '')
   .filter(Boolean);
 
 export const APP_NAME = 'Shh VC';
+
+/**
+ * Opened straight from disk (file://). There is no web address to share, so
+ * people join with a room code instead of a link.
+ */
+export const FROM_FILE = typeof location !== 'undefined' && location.protocol === 'file:';
