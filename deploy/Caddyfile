@@ -16,7 +16,7 @@ talk.example.com {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		# No third-party scripts, styles or fonts. media-src allows https so a
 		# watch-together video link can play; nothing else may load cross-origin.
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; media-src 'self' blob: https:; worker-src 'self' blob:; connect-src 'self' wss://sfu.example.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; media-src 'self' blob: https:; worker-src 'self' blob:; connect-src 'self' wss://sfu.example.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 		-Server
 	}
 

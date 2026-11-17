@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { ArrowLeft, Check, Copy, Lock, Mic, MicOff, Settings as SettingsIcon, Video, VideoOff } from 'lucide-preact';
+import { ArrowLeft, Check, Copy, Headphones, Lock, Mic, MicOff, Settings as SettingsIcon, Video, VideoOff } from 'lucide-preact';
 import { DIRECT, FROM_FILE } from '../../app/mode.ts';
 import { settings, updateSettings } from '../../app/settings.ts';
 import { backToStart, inviteLink, join, joinError, pending, preloadRoom, view } from '../../app/state.ts';
+import { MicPipeline } from '../../audio/mic.ts';
 import { mediaErrorText } from '../../call/errors.ts';
 import { Avatar, Button, IconButton, Mark } from '../components/primitives.tsx';
+import { SuppressionPicker } from '../components/SuppressionPicker.tsx';
 import { SettingsDialog } from '../room/SettingsDialog.tsx';
 
 /**
@@ -61,41 +63,33 @@ export function PreJoin() {
     };
   }, [cam, s.camId]);
 
-  // Microphone level meter
+  // Microphone preview, through the same pipeline the call uses, so the
+  // suppression choice here is exactly what people will hear.
+  const pipeRef = useRef<MicPipeline | undefined>(undefined);
+  const [monitor, setMonitor] = useState(false);
+  const [micNote, setMicNote] = useState<string | undefined>();
   useEffect(() => {
-    if (!mic) return;
-    let stream: MediaStream | undefined;
-    let ctx: AudioContext | undefined;
+    // Hand the microphone over to the call as soon as joining starts.
+    if (!mic || joining) return;
+    const pipe = new MicPipeline(settings.peek().suppression, {
+      deviceId: s.micId || undefined,
+      echoCancellation: s.echoCancellation,
+      autoGainControl: s.autoGain,
+    });
+    pipeRef.current = pipe;
     let raf = 0;
     let cancelled = false;
-    navigator.mediaDevices
-      .getUserMedia({
-        audio: {
-          ...(s.micId ? { deviceId: s.micId } : {}),
-          noiseSuppression: s.noiseSuppression,
-          echoCancellation: s.echoCancellation,
-          autoGainControl: s.autoGain,
-        },
-      })
-      .then((st) => {
-        if (cancelled) {
-          for (const t of st.getTracks()) t.stop();
-          return;
-        }
-        stream = st;
+    let smooth = 0;
+    pipe
+      .start()
+      .then(() => {
+        if (cancelled) return;
         setMicError(undefined);
-        ctx = new AudioContext();
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 512;
-        ctx.createMediaStreamSource(st).connect(analyser);
-        const data = new Uint8Array(analyser.fftSize);
-        let smooth = 0;
+        setMicNote(pipe.fallbackReason);
+        pipe.setMonitor(monitor);
         const loop = () => {
-          analyser.getByteTimeDomainData(data);
-          let peak = 0;
-          for (const v of data) peak = Math.max(peak, Math.abs(v - 128) / 128);
-          smooth = Math.max(peak, smooth * 0.88);
-          const shown = Math.min(1, smooth * 1.6);
+          smooth = Math.max(pipe.level(), smooth * 0.88);
+          const shown = Math.min(1, smooth);
           if (meterRef.current) meterRef.current.style.transform = `scaleX(${shown.toFixed(3)})`;
           frameRef.current?.style.setProperty('--level', shown.toFixed(3));
           raf = requestAnimationFrame(loop);
@@ -110,10 +104,20 @@ export function PreJoin() {
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
-      if (stream) for (const t of stream.getTracks()) t.stop();
-      void ctx?.close();
+      pipe.stop();
+      if (pipeRef.current === pipe) pipeRef.current = undefined;
     };
-  }, [mic, s.micId, s.noiseSuppression, s.echoCancellation, s.autoGain]);
+  }, [mic, joining, s.micId, s.echoCancellation, s.autoGain]);
+
+  useEffect(() => {
+    const pipe = pipeRef.current;
+    if (!pipe) return;
+    void pipe.setMode(s.suppression).then(() => setMicNote(pipe.fallbackReason));
+  }, [s.suppression]);
+
+  useEffect(() => {
+    pipeRef.current?.setMonitor(monitor);
+  }, [monitor]);
 
   const copy = async () => {
     try {
@@ -191,7 +195,23 @@ export function PreJoin() {
             <div class="meter">
               <span ref={meterRef} style={{ transform: 'scaleX(0)' }} />
             </div>
-            <span class="meter-label">{mic ? 'Say something to test your microphone' : 'Microphone is off'}</span>
+            <span class="meter-label">{mic ? 'Say something — the bar shows what others will hear' : 'Microphone is off'}</span>
+            <button
+              type="button"
+              class={`hear-btn ${monitor ? 'on' : ''}`}
+              aria-pressed={monitor}
+              disabled={!mic}
+              onClick={() => setMonitor(!monitor)}
+              data-tip="Hear yourself through the filter. Use headphones."
+              data-testid="hear-yourself"
+            >
+              <Headphones />
+              <span>{monitor ? 'Listening' : 'Hear yourself'}</span>
+            </button>
+          </div>
+          <div class="prejoin-suppression">
+            <span class="label">Noise suppression</span>
+            <SuppressionPicker compact value={s.suppression} note={micNote} onChange={(v) => updateSettings({ suppression: v })} />
           </div>
           {(micError || camError) && (
             <p class="field-error" role="alert">

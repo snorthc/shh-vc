@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
-  Check, Clapperboard, Ellipsis, Headphones, HeadphoneOff, Keyboard, Link2, Lock, LockOpen, Maximize, MessageSquare, Mic, MicOff,
+  AudioLines, Check, ChevronUp, Clapperboard, Ellipsis, Headphones, HeadphoneOff, Keyboard, Link2, Lock, LockOpen, Maximize, MessageSquare, Mic, MicOff,
   Minimize, MonitorUp, PhoneOff, Settings as SettingsIcon, ShieldCheck, Smile, Users, Video, VideoOff, VolumeX, WifiOff, X,
 } from 'lucide-preact';
 import { FROM_FILE } from '../../app/mode.ts';
+import { SUPPRESSION_OPTIONS } from '../../audio/mic.ts';
 import { type LayoutMode, settings, updateSettings } from '../../app/settings.ts';
 import { inviteLink, leaveRoom } from '../../app/state.ts';
 import { formatDuration } from '../../app/util.ts';
@@ -11,6 +12,7 @@ import type { RoomSession } from '../../call/session.ts';
 import { QUICK_REACTIONS } from '../../chat/store.ts';
 import { useEvent, useIsMobile, usePresence, useSheetDrag, useTicker } from '../components/hooks.ts';
 import { MenuItem, Popover } from '../components/Popover.tsx';
+import { SuppressionPicker } from '../components/SuppressionPicker.tsx';
 import { Button, IconButton, Mark, Segmented } from '../components/primitives.tsx';
 import { ChatPanel } from './ChatPanel.tsx';
 import { ShortcutsDialog, VerifyDialog, WatchDialog } from './Dialogs.tsx';
@@ -69,12 +71,13 @@ export function RoomView(props: { session: RoomSession }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [dialog, setDialog] = useState<DialogId>(null);
   const [settingsTab, setSettingsTab] = useState<'profile' | 'devices' | 'share' | 'sounds'>('devices');
-  const [menu, setMenu] = useState<'more' | 'react' | 'share' | null>(null);
+  const [menu, setMenu] = useState<'more' | 'react' | 'share' | 'mic' | null>(null);
   const [hasContent, setHasContent] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [idle, setIdle] = useState(false);
   const [copied, setCopied] = useState(false);
   const moreRef = useRef<HTMLButtonElement>(null);
+  const micMenuRef = useRef<HTMLButtonElement>(null);
   const reactRef = useRef<HTMLButtonElement>(null);
   const shareRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -106,10 +109,9 @@ export function RoomView(props: { session: RoomSession }) {
   useEffect(() => {
     let smooth = 0;
     const t = setInterval(() => {
-      const p = session.room.localParticipant;
-      const level = p.isMicrophoneEnabled ? (p.audioLevel ?? 0) : 0;
-      smooth = Math.max(level, smooth * 0.7);
-      if (micLevel.current) micLevel.current.style.transform = `scaleX(${Math.min(1, smooth * 2.2).toFixed(3)})`;
+      // After suppression: this is what the room hears from you.
+      smooth = Math.max(session.micLevel(), smooth * 0.7);
+      if (micLevel.current) micLevel.current.style.transform = `scaleX(${smooth.toFixed(3)})`;
     }, 90);
     return () => clearInterval(t);
   }, []);
@@ -333,6 +335,20 @@ export function RoomView(props: { session: RoomSession }) {
               {micOn ? <Mic /> : <MicOff />}
               {micOn && <span class="mic-level" aria-hidden="true"><span ref={micLevel} /></span>}
             </DockButton>
+            {!mobile && (
+              <button
+                type="button"
+                ref={micMenuRef}
+                class={`dock-caret ${menu === 'mic' ? 'active' : ''}`}
+                aria-label="Microphone options"
+                aria-expanded={menu === 'mic'}
+                data-tip="Noise suppression"
+                onClick={() => setMenu(menu === 'mic' ? null : 'mic')}
+                data-testid="mic-options"
+              >
+                <ChevronUp />
+              </button>
+            )}
             <DockButton label={deafened ? 'Undeafen' : 'Deafen'} tip={deafened ? 'Undeafen · D' : 'Deafen · D'} off={deafened} pressed={deafened} onClick={() => session.setDeafened(!deafened)} testId="deafen">
               {deafened ? <HeadphoneOff /> : <Headphones />}
             </DockButton>
@@ -405,6 +421,17 @@ export function RoomView(props: { session: RoomSession }) {
         )}
       </div>
 
+      <Popover open={menu === 'mic'} onClose={() => setMenu(null)} anchor={micMenuRef} align="start" label="Microphone options" class="mic-pop" testId="mic-menu">
+        <div class="menu-label">Noise suppression</div>
+        <SuppressionPicker
+          value={session.micSuppression.value}
+          note={session.suppressionNote.value}
+          onChange={(v) => void session.setSuppression(v)}
+        />
+        <div class="menu-sep" />
+        <MenuItem icon={<SettingsIcon />} label="Microphone and devices" onSelect={() => openSettings('devices')} />
+      </Popover>
+
       <Popover open={menu === 'react'} onClose={() => setMenu(null)} anchor={reactRef} label="React" class="react-pop">
         {reactButtons}
       </Popover>
@@ -430,6 +457,12 @@ export function RoomView(props: { session: RoomSession }) {
               onSelect={() => (sharing ? (setMenu(null), void share.stop()) : startShare())}
             />
             <MenuItem icon={<Users />} label={`People · ${people.length}`} onSelect={() => togglePanel('people')} />
+            <MenuItem
+              icon={<AudioLines />}
+              label="Noise suppression"
+              sub={SUPPRESSION_OPTIONS.find((o) => o.id === session.micSuppression.value)?.label}
+              onSelect={() => openSettings('devices')}
+            />
           </>
         )}
         <MenuItem icon={<Clapperboard />} label="Watch together" sub="Play a film or episode for the room. Everyone can pause." onSelect={() => { setMenu(null); setDialog('watch'); }} />

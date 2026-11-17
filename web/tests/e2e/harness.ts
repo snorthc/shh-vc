@@ -19,7 +19,7 @@ const ROOT = pathJoin(import.meta.dirname, '../..');
  */
 export const DIRECT = process.env.E2E_MODE === 'direct';
 export const RELAY_PORT = 7447;
-const DIST = pathJoin(ROOT, DIRECT ? 'dist-direct-test' : 'dist');
+const DIST = process.env.E2E_DIST ?? pathJoin(ROOT, DIRECT ? 'dist-direct-test' : 'dist');
 const FIXTURES = pathJoin(ROOT, 'tests/fixtures');
 const API = { host: '127.0.0.1', port: 8787 };
 
@@ -71,7 +71,9 @@ function serveFile(path: string, req: import('node:http').IncomingMessage, res: 
   createReadStream(path).pipe(res);
 }
 
-export async function startHarness(opts: { tabCaptureTitle?: string; stubApi?: boolean } = {}): Promise<Harness> {
+export async function startHarness(
+  opts: { tabCaptureTitle?: string; stubApi?: boolean; audioFile?: string } = {},
+): Promise<Harness> {
   if (!existsSync(pathJoin(DIST, 'index.html'))) throw new Error(`build first: no ${DIST}`);
   const relay = DIRECT ? startRelay(RELAY_PORT) : undefined;
 
@@ -136,6 +138,8 @@ export async function startHarness(opts: { tabCaptureTitle?: string; stubApi?: b
       ...(opts.tabCaptureTitle ? [] : ['--use-fake-ui-for-media-stream']),
       '--use-fake-device-for-media-stream',
       `--use-file-for-fake-video-capture=${pathJoin(FIXTURES, 'camera.mjpeg')}`,
+      // A real recording as the microphone, so audio quality can be measured.
+      ...(opts.audioFile ? [`--use-file-for-fake-audio-capture=${pathJoin(FIXTURES, opts.audioFile)}`] : []),
       '--autoplay-policy=no-user-gesture-required',
       opts.tabCaptureTitle
         ? `--auto-select-tab-capture-source-by-title=${opts.tabCaptureTitle}`
@@ -190,9 +194,22 @@ export async function joinRoom(
   h: Harness,
   secret: string,
   name: string,
-  opts: Parameters<typeof newClient>[1] & { host?: string; camera?: boolean; mic?: boolean } = {},
+  opts: Parameters<typeof newClient>[1] & {
+    host?: string;
+    camera?: boolean;
+    mic?: boolean;
+    /** Saved preferences to start with, e.g. { suppression: 'off' }. */
+    settings?: Record<string, unknown>;
+  } = {},
 ): Promise<Client> {
   const c = await newClient(h, opts);
+  if (opts.settings) {
+    await c.ctx.addInitScript((prefs) => {
+      const key = 'shhvc.settings.v1';
+      const current = JSON.parse(localStorage.getItem(key) ?? '{}');
+      localStorage.setItem(key, JSON.stringify({ ...current, ...prefs }));
+    }, opts.settings);
+  }
   await c.page.goto(`${h.origin}/#k=${secret}${opts.host ? `&h=${opts.host}` : ''}`, { waitUntil: 'load' });
   await c.page.getByLabel('Your name').fill(name);
   const micBtn = c.page.locator('.preview-controls .dock-btn').first();

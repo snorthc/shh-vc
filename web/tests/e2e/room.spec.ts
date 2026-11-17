@@ -612,15 +612,67 @@ describe('sounds and settings', () => {
     await closeAll(a);
   }, 120_000);
 
-  it('applies microphone processing switches to the live track', async () => {
-    const a = await joinRoom(h, freshSecret(), 'Alice', { mic: true });
-    const ns = () => sess<boolean | undefined>(a.page, 's => [...s.room.localParticipant.audioTrackPublications.values()][0].track.mediaStreamTrack.getSettings().noiseSuppression');
-    await expect.poll(ns, { timeout: 15_000 }).toBe(true);
+  it('switches noise suppression mid-call without interrupting the call', async () => {
+    const secret = freshSecret();
+    const a = await joinRoom(h, secret, 'Alice', { mic: true, settings: { suppression: 'standard' } });
+    const b = await joinRoom(h, secret, 'Bob');
+    await settled(a, b);
+    const state = () =>
+      sess<{ mode: string; browserNs?: boolean; trackId: string; note?: string }>(
+        a.page,
+        's => ({ mode: s.micSuppression.value, browserNs: s.mic?.inputSettings()?.noiseSuppression, trackId: s.mic?.track.id, note: s.suppressionNote.value })',
+      );
+    const before = await state();
+    expect(before).toMatchObject({ mode: 'standard', browserNs: true });
+
+    // The neural filters replace the browser's own filter rather than stacking on it.
+    for (const mode of ['strong', 'light', 'off'] as const) {
+      if (await a.page.getByTestId('mic-options').isVisible()) {
+        await a.page.getByTestId('mic-options').click();
+        await a.page.locator(`[data-testid="mic-menu"] [data-suppression="${mode}"]`).click();
+        await a.page.keyboard.press('Escape');
+      }
+      await expect.poll(async () => (await state()).mode, { timeout: 15_000 }).toBe(mode);
+      const now = await state();
+      expect(now.browserNs).toBe(false);
+      expect(now.note).toBeUndefined();
+      // Same outgoing track throughout: nothing was renegotiated.
+      expect(now.trackId).toBe(before.trackId);
+    }
+    // Bob still hears Alice the whole time.
+    expect(await b.page.locator('[data-bt-audio] audio').count()).toBeGreaterThan(0);
+    expect(await sess<string>(a.page, '() => JSON.parse(localStorage.getItem("shhvc.settings.v1")).suppression')).toBe('off');
+
+    // Echo cancellation and gain reach the capture as well.
     await a.page.getByTestId('more').click();
     await a.page.getByRole('menuitem', { name: 'Settings' }).click();
-    await a.page.getByRole('switch', { name: 'Noise suppression' }).click();
-    await expect.poll(ns, { timeout: 15_000 }).toBe(false);
-    await closeAll(a);
+    await a.page.getByRole('switch', { name: 'Echo cancellation' }).click();
+    await expect.poll(() => sess<boolean>(a.page, 's => s.mic.inputSettings().echoCancellation'), { timeout: 15_000 }).toBe(false);
+    expect(a.errors.concat(b.errors)).toEqual([]);
+    await closeAll(a, b);
+  }, 180_000);
+
+  it.skipIf(!DIRECT)('negotiates redundant audio, tuned Opus and voice-first priority', async () => {
+    const secret = freshSecret();
+    const a = await joinRoom(h, secret, 'Alice', { mic: true });
+    const b = await joinRoom(h, secret, 'Bob');
+    await settled(a, b);
+    const wire = await sess<{ first: string; priority: string; fmtp: string }>(
+      a.page,
+      `s => {
+        const pc = Object.values(s.room.discovery.getPeers())[0].connection;
+        const sender = pc.getSenders().find((x) => x.track && x.track.kind === 'audio');
+        const p = sender.getParameters();
+        const nl = String.fromCharCode(13, 10);
+        const m = pc.currentRemoteDescription.sdp.split('m=').find((x) => x.startsWith('audio'));
+        return { first: p.codecs[0].mimeType, priority: p.encodings[0].priority, fmtp: m.split(nl).find((l) => l.startsWith('a=fmtp:111 ')) };
+      }`,
+    );
+    expect(wire.first).toBe('audio/red');
+    expect(wire.priority).toBe('high');
+    expect(wire.fmtp).toContain('maxaveragebitrate=48000');
+    expect(wire.fmtp).toContain('useinbandfec=1');
+    await closeAll(a, b);
   }, 120_000);
 
   it('opens every dialog and menu, and closes each with Escape', async () => {

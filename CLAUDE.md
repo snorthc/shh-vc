@@ -100,6 +100,23 @@ bug, even if every test passes.
     lock, remove or mute-for-everyone in this mode.
 30. If no relay is reachable the room must say that nobody can find it.
 
+## Microphone and voice
+
+31. The microphone always goes through `audio/mic.ts`. Its outgoing track
+    never changes during a call; switching suppression or devices rewires the
+    graph instead of renegotiating.
+32. Never stack two noise suppressors. The AI filters run with the browser's
+    own `noiseSuppression` off. Stacking them is a known cause of robotic,
+    watery voices.
+33. When re-capturing the microphone, stop the old capture first: Chrome
+    otherwise returns the same device with the old processing settings.
+34. Noise-suppression models are bundled and served from this site. Never load
+    one from a third-party CDN (that is why DeepFilterNet is not included).
+    The page CSP allows `'wasm-unsafe-eval'` for them and nothing more.
+35. Keep RED first in the audio codec order, Opus FEC on and DTX off
+    (`audio/tuning.ts`). `tests/audio.test.ts` and the redundant-audio browser
+    test guard this.
+
 ## Cost
 
 26. Everything must run on free infrastructure. No paid API, SDK, font,

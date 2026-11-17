@@ -6,6 +6,7 @@
  * ids, volumes, presets).
  */
 import { effect, signal } from '@preact/signals';
+import type { Suppression } from '../audio/mic.ts';
 import type { BitrateLevel, PresetId, ShareQuality } from '../share/presets.ts';
 
 export type LayoutMode = 'presentation' | 'cinema' | 'theatre' | 'social';
@@ -20,7 +21,8 @@ export interface Settings {
   micId: string;
   camId: string;
   speakerId: string;
-  noiseSuppression: boolean;
+  /** Noise suppression engine for the microphone. */
+  suppression: Suppression;
   echoCancellation: boolean;
   autoGain: boolean;
   mirrorSelf: boolean;
@@ -43,7 +45,7 @@ export const DEFAULT_SETTINGS: Settings = {
   micId: '',
   camId: '',
   speakerId: '',
-  noiseSuppression: true,
+  suppression: 'strong',
   echoCancellation: true,
   autoGain: true,
   mirrorSelf: true,
@@ -59,7 +61,10 @@ function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
-    const parsed = JSON.parse(raw) as Partial<Settings>;
+    const parsed = JSON.parse(raw) as Partial<Settings> & { noiseSuppression?: boolean };
+    // Earlier versions had a single on/off switch.
+    if (!parsed.suppression && parsed.noiseSuppression === false) parsed.suppression = 'off';
+    delete parsed.noiseSuppression;
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,

@@ -912,3 +912,112 @@
     linear-gradient(oklch(1 0 0 / 0.025), transparent 120px),
     var(--surface-1);
 }
+
+/* ---------- Noise suppression picker ---------- */
+
+.suppression {
+  display: grid;
+  gap: 8px;
+}
+
+.suppression-list {
+  display: grid;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+}
+
+.suppression-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  transition: background var(--t-fast) var(--ease-out);
+}
+
+.suppression-opt:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.suppression-opt[aria-checked='true'] {
+  background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.suppression-opt[aria-checked='true'] svg {
+  color: var(--brass);
+}
+
+.suppression-opt:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.suppression-opt svg {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  flex: none;
+  color: var(--text-3);
+  transition: color var(--t-fast);
+}
+
+.suppression-text {
+  display: grid;
+  gap: 1px;
+}
+
+.suppression-name {
+  font-size: var(--fs-13);
+  font-weight: 560;
+}
+
+.suppression-sum {
+  font-size: var(--fs-12);
+  line-height: 1.4;
+  color: var(--text-3);
+}
+
+/* Compact: four in a row, the chosen one explained underneath */
+.suppression.compact .suppression-list {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.suppression.compact .suppression-opt {
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 4px 8px;
+  text-align: center;
+}
+
+.suppression.compact .suppression-opt svg {
+  margin: 0;
+}
+
+.suppression.compact .suppression-name {
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+
+.suppression-hint {
+  min-height: 2.9em;
+}
+
+.mic-pop {
+  width: 340px;
+  padding: 6px;
+}
+
+.mic-pop .suppression-list {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}

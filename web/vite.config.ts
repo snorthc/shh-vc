@@ -18,7 +18,8 @@ const pagePolicy = {
     if (process.env.VITE_TRANSPORT !== 'direct' || SINGLE) return html;
     const csp = [
       "default-src 'self'",
-      "script-src 'self'",
+      // wasm-unsafe-eval lets the noise-suppression models (WebAssembly) run.
+      "script-src 'self' 'wasm-unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self'",

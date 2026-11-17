@@ -14,7 +14,6 @@ import {
   ConnectionQuality,
   ConnectionState,
   DisconnectReason,
-  type LocalAudioTrack,
   type LocalTrackPublication,
   type Participant,
   type RemoteParticipant,
@@ -25,6 +24,7 @@ import {
   type TrackPublishOptions,
 } from 'livekit-client';
 import { DIRECT, RELAY_URLS } from '../app/mode.ts';
+import { MicPipeline, type Suppression } from '../audio/mic.ts';
 import { settings, updateSettings } from '../app/settings.ts';
 import { toast } from '../app/toasts.ts';
 import { describeError, hueFor } from '../app/util.ts';
@@ -200,6 +200,10 @@ export class RoomSession {
   readonly audioBlocked = signal(false);
   /** Serverless mode: false when no discovery relay can be reached. */
   readonly discoveryOnline = signal(true);
+  /** The noise suppression actually running on the microphone. */
+  readonly micSuppression = signal<Suppression>(settings.value.suppression);
+  /** Set when an AI filter could not start and something else is in use. */
+  readonly suppressionNote = signal<string | undefined>(undefined);
   /** A file being played for the room, by us or by someone else. */
   readonly fileShow = signal<FileShow | undefined>(undefined);
   /** Set on the device that owns the file. */
@@ -226,6 +230,7 @@ export class RoomSession {
   private reactionSeq = 1;
   /** What the user last asked the microphone to be, to tell a host mute apart. */
   private micIntent = false;
+  private mic: MicPipeline | undefined;
   private filePubs: LocalTrackPublication[] = [];
   /** A command we sent that the host has not yet confirmed by its state. */
   private pendingFileCmd: { cmd: FileCommand; sentAt: number; tries: number } | undefined;
@@ -282,7 +287,6 @@ export class RoomSession {
         adaptiveStream: true,
         dynacast: true,
         publishDefaults: cameraPublishOptions(),
-        audioCaptureDefaults: this.micConstraints(),
         encryption: { keyProvider: this.keyProvider!, worker: this.worker },
       });
     }
@@ -332,6 +336,8 @@ export class RoomSession {
     this.onFileCommand = undefined;
     this.localFile.value = undefined;
     this.share.dispose();
+    this.mic?.stop();
+    this.mic = undefined;
     this.signalCh.close();
     if (reason === 'left') play('leave');
     batch(() => {
@@ -381,15 +387,69 @@ export class RoomSession {
     const s = settings.value;
     return {
       ...(s.micId ? { deviceId: s.micId } : {}),
-      noiseSuppression: s.noiseSuppression,
+      noiseSuppression: s.suppression === 'standard',
       echoCancellation: s.echoCancellation,
       autoGainControl: s.autoGain,
     };
   }
 
+  /**
+   * The first time the microphone turns on, build the pipeline and publish its
+   * output. After that, mute and unmute only toggle the published track; the
+   * pipeline keeps running so suppression and device changes are instant.
+   */
+  private async ensureMic(): Promise<void> {
+    if (this.mic) return;
+    const s = settings.value;
+    const pipeline = new MicPipeline(s.suppression, {
+      deviceId: s.micId || undefined,
+      echoCancellation: s.echoCancellation,
+      autoGainControl: s.autoGain,
+    });
+    try {
+      await pipeline.start();
+      await this.room.localParticipant.publishTrack(pipeline.track, {
+        source: Track.Source.Microphone,
+        name: 'microphone',
+        audioPreset: { maxBitrate: 48_000 },
+        red: true,
+        dtx: false,
+      });
+    } catch (err) {
+      pipeline.stop();
+      throw err;
+    }
+    this.mic = pipeline;
+    this.micSuppression.value = pipeline.mode;
+    this.suppressionNote.value = pipeline.fallbackReason;
+  }
+
+  /** Switch noise suppression while live. */
+  async setSuppression(mode: Suppression): Promise<void> {
+    updateSettings({ suppression: mode });
+    if (!this.mic) {
+      this.micSuppression.value = mode;
+      return;
+    }
+    try {
+      await this.mic.setMode(mode);
+    } catch (err) {
+      toast('Could not change noise suppression', 'warn', mediaErrorText(err, 'microphone'));
+    }
+    this.micSuppression.value = this.mic.mode;
+    this.suppressionNote.value = this.mic.fallbackReason;
+    if (this.mic.fallbackReason) toast('Noise suppression', 'warn', this.mic.fallbackReason);
+  }
+
+  /** 0–1 level of what the room hears from you, after suppression. */
+  micLevel(): number {
+    return this.mic && this.micOn.peek() ? this.mic.level() : 0;
+  }
+
   async setMic(on: boolean, silent = false): Promise<void> {
     this.micIntent = on;
     try {
+      if (on) await this.ensureMic();
       await this.room.localParticipant.setMicrophoneEnabled(on, this.micConstraints());
       if (!silent) play(on ? 'unmute' : 'mute');
     } catch (err) {
@@ -429,11 +489,10 @@ export class RoomSession {
 
   /** Re-acquire the microphone after a processing toggle changed. */
   async applyMicProcessing(): Promise<void> {
-    const pub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
-    const track = pub?.audioTrack as LocalAudioTrack | undefined;
-    if (!track) return;
+    if (!this.mic) return;
+    const s = settings.value;
     try {
-      await track.restartTrack(this.micConstraints());
+      await this.mic.setInput({ echoCancellation: s.echoCancellation, autoGainControl: s.autoGain });
     } catch (err) {
       toast('Could not apply that microphone setting', 'warn', describeError(err));
     }
@@ -444,7 +503,9 @@ export class RoomSession {
     if (kind === 'videoinput') updateSettings({ camId: deviceId });
     if (kind === 'audiooutput') updateSettings({ speakerId: deviceId });
     try {
-      await this.room.switchActiveDevice(kind, deviceId);
+      // The microphone goes through our own pipeline, so it switches there.
+      if (kind === 'audioinput') await this.mic?.setInput({ deviceId: deviceId || undefined });
+      else await this.room.switchActiveDevice(kind, deviceId);
     } catch (err) {
       toast('Could not switch device', 'warn', describeError(err));
     }

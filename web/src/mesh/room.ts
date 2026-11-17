@@ -15,6 +15,7 @@
  * a room can see each other's IP addresses. Hiding them needs a relay server.
  */
 import { getRelaySockets, joinRoom, type Room as DiscoveryRoom } from 'trystero';
+import { TunedPeerConnection } from '../audio/tuned-pc.ts';
 
 export const MAX_PEOPLE = 6;
 
@@ -239,7 +240,7 @@ class MeshLocalParticipant extends MeshParticipant {
     if (source === 'microphone') this.room.watchLevel(track, this);
 
     // Bitrate ceilings can only be set once a sender exists on each connection.
-    const encoding = source === 'camera' ? { maxBitrate: 900_000, maxFramerate: 30 } : opts.screenShareEncoding;
+    const encoding = source === 'camera' ? this.room.cameraEncoding() : opts.screenShareEncoding;
     if (encoding && track.kind === 'video') {
       setTimeout(() => {
         const sender = track.sender;
@@ -292,7 +293,9 @@ export class MeshRoom {
   private readonly byPeer = new Map<string, MeshParticipant>();
   private readonly pendingStreams = new Map<string, { stream: MediaStream; source: Source }[]>();
   private readonly pendingPubs = new Map<string, PubWire[]>();
-  private readonly meters = new Map<MeshTrack, { ctx: AudioContext; analyser: AnalyserNode; data: Uint8Array<ArrayBuffer>; owner: MeshParticipant; quietSince: number }>();
+  private readonly meters = new Map<MeshTrack, { source: MediaStreamAudioSourceNode; analyser: AnalyserNode; data: Uint8Array<ArrayBuffer>; owner: MeshParticipant; quietSince: number }>();
+  /** One audio context for every level meter, rather than one each. */
+  private meterCtx: AudioContext | undefined;
   private timers: ReturnType<typeof setInterval>[] = [];
   private send: {
     hello?: (id: string, target?: string) => void;
@@ -340,6 +343,8 @@ export class MeshRoom {
         rtcConfig: {
           iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }],
         },
+        // Redundant audio, 64 kbps Opus and voice-first priority: see audio/tuning.ts.
+        rtcPolyfill: TunedPeerConnection,
         ...(this.opts.relayUrls?.length ? { relayConfig: { urls: this.opts.relayUrls, redundancy: this.opts.relayUrls.length } } : {}),
       },
       this.opts.roomId,
@@ -370,6 +375,7 @@ export class MeshRoom {
       this.byPeer.set(peerId, p);
       this.remoteParticipants.set(identity, p);
       this.emit('participantConnected', p);
+      this.retuneCamera();
       // Send them everything we are already publishing.
       for (const pub of this.localParticipant.trackPublications.values()) {
         void room.addStream(pub.track.stream, { target: peerId, metadata: { source: pub.source } }).catch(() => undefined);
@@ -391,6 +397,7 @@ export class MeshRoom {
       this.remoteParticipants.delete(p.identity);
       for (const pub of [...p.trackPublications.values()]) this.removeRemote(p, pub);
       this.emit('participantDisconnected', p);
+      this.retuneCamera();
     });
 
     room.onPeerStream((stream, { peerId, metadata }) => {
@@ -456,8 +463,10 @@ export class MeshRoom {
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
     for (const pub of [...this.localParticipant.trackPublications.values()]) pub.track.mediaStreamTrack.stop();
-    for (const m of this.meters.values()) void m.ctx.close().catch(() => undefined);
+    for (const m of this.meters.values()) m.source.disconnect();
     this.meters.clear();
+    void this.meterCtx?.close().catch(() => undefined);
+    this.meterCtx = undefined;
     await this.discovery?.leave().catch(() => undefined);
     this.discovery = undefined;
     this.emit('disconnected', undefined);
@@ -517,6 +526,31 @@ export class MeshRoom {
     // itself is updated by the caller and sent to whoever joins next.
     if (this.byPeer.size === 0) return;
     await this.discovery?.replaceTrack(old, next).catch(() => undefined);
+  }
+
+  /**
+   * On a direct connection you upload one copy of your camera per person, so
+   * the per-copy bitrate shrinks as the room grows. That keeps the upload from
+   * choking, which is what drags audio down with it.
+   */
+  cameraEncoding(): { maxBitrate: number; maxFramerate: number } {
+    const others = Math.max(1, this.byPeer.size);
+    const maxBitrate = others <= 1 ? 1_200_000 : others === 2 ? 800_000 : others === 3 ? 550_000 : 400_000;
+    return { maxBitrate, maxFramerate: others >= 4 ? 24 : 30 };
+  }
+
+  /** Re-apply the camera ceiling after someone joins or leaves. */
+  private retuneCamera(): void {
+    const cam = this.localParticipant.trackPublications.get('camera');
+    if (!cam) return;
+    const enc = this.cameraEncoding();
+    setTimeout(() => {
+      const sender = cam.track.sender;
+      if (!sender) return;
+      const p = sender.getParameters();
+      for (const e of p.encodings ?? []) Object.assign(e, enc);
+      void sender.setParameters(p);
+    }, 800);
   }
 
   announcePublications(target?: string): void {
@@ -583,14 +617,17 @@ export class MeshRoom {
   watchLevel(track: MeshTrack, owner?: MeshParticipant): void {
     const prev = this.meters.get(track);
     const who = owner ?? prev?.owner;
-    if (prev) void prev.ctx.close().catch(() => undefined);
+    prev?.source.disconnect();
     if (!who) return;
     try {
-      const ctx = new AudioContext();
+      this.meterCtx ??= new AudioContext();
+      const ctx = this.meterCtx;
+      if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
-      ctx.createMediaStreamSource(new MediaStream([track.mediaStreamTrack])).connect(analyser);
-      this.meters.set(track, { ctx, analyser, data: new Uint8Array(analyser.fftSize), owner: who, quietSince: 0 });
+      const source = ctx.createMediaStreamSource(new MediaStream([track.mediaStreamTrack]));
+      source.connect(analyser);
+      this.meters.set(track, { source, analyser, data: new Uint8Array(analyser.fftSize), owner: who, quietSince: 0 });
     } catch {
       /* no Web Audio: speaking indicators simply stay off */
     }
@@ -598,14 +635,13 @@ export class MeshRoom {
 
   /** Stop metering a track but remember whose it is, for a restart. */
   unwatchLevelKeepOwner(track: MeshTrack): void {
-    const m = this.meters.get(track);
-    if (m) void m.ctx.close().catch(() => undefined);
+    this.meters.get(track)?.source.disconnect();
   }
 
   unwatchLevel(track: MeshTrack): void {
     const m = this.meters.get(track);
     if (!m) return;
-    void m.ctx.close().catch(() => undefined);
+    m.source.disconnect();
     this.meters.delete(track);
     m.owner.audioLevel = 0;
     m.owner.isSpeaking = false;

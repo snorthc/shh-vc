@@ -6,6 +6,7 @@ import { play, unlockAudio } from '../../sfx/sounds.ts';
 import { shareAudioSupport } from '../../share/support.ts';
 import { Dialog } from '../components/Dialog.tsx';
 import { Avatar, Button, Row, Segmented, Slider, Switch } from '../components/primitives.tsx';
+import { SuppressionPicker } from '../components/SuppressionPicker.tsx';
 import { ShareQuality } from './ShareQuality.tsx';
 
 type Tab = 'profile' | 'devices' | 'share' | 'sounds';
@@ -160,10 +161,14 @@ export function SettingsDialog(props: {
             )}
             <DeviceSelect kind="videoinput" label="Camera" devices={devices} value={s.camId} onChange={(id) => setDevice('videoinput', id)} />
 
+            <h3 class="section-title">Noise suppression</h3>
+            <SuppressionPicker
+              value={session ? session.micSuppression.value : s.suppression}
+              note={session?.suppressionNote.value}
+              onChange={(v) => (session ? void session.setSuppression(v) : updateSettings({ suppression: v }))}
+            />
+
             <h3 class="section-title">Microphone processing</h3>
-            <Row title="Noise suppression" sub="Reduces steady background noise such as fans.">
-              <Switch label="Noise suppression" checked={s.noiseSuppression} onChange={(v) => setProcessing({ noiseSuppression: v })} />
-            </Row>
             <Row title="Echo cancellation" sub="Keep on unless you are wearing headphones.">
               <Switch label="Echo cancellation" checked={s.echoCancellation} onChange={(v) => setProcessing({ echoCancellation: v })} />
             </Row>

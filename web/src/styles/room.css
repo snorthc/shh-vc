@@ -1665,3 +1665,36 @@
     filter: blur(40px) saturate(1.6);
   }
 }
+
+/* The microphone's options caret, attached to its button */
+.dock-caret {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 48px;
+  margin-left: -6px;
+  border: 0;
+  border-radius: 0 10px 10px 0;
+  background: transparent;
+  color: var(--text-3);
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast);
+}
+
+.dock-caret svg {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--t-med) var(--ease-out);
+}
+
+.dock-caret:hover,
+.dock-caret.active {
+  background: oklch(1 0 0 / 0.07);
+  color: var(--text);
+}
+
+.dock-caret.active svg {
+  transform: rotate(180deg);
+}

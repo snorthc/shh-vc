@@ -1,0 +1,1 @@
+speech.wav and noisy.wav: LibriSpeech utterance 5703-47212-0000 (CC BY 4.0, Panayotov et al.), via librosa example data. noisy.wav adds synthetic fan noise and key clicks.

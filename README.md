@@ -29,6 +29,20 @@ Screens are in [`docs/screens`](docs/screens).
 verification number to confirm nobody has been swapped into the encrypted
 group.
 
+**Clear voice, even on bad Wi-Fi.** Every audio packet also carries the
+previous 20 ms of sound (RED), Opus runs at 48 kbps with error correction,
+and audio gets priority over video when the connection is under pressure. In a
+measured call with 12% packet loss, the share of audio the receiver had to
+invent dropped from 3.7% to under 0.6%. `tests/audio/measure.ts` reproduces it.
+
+**Noise suppression you choose.** Off, Standard (the browser's built-in
+filter), AI · Light (RNNoise) or AI · Strong (GTCRN, a 2024 neural model of the
+same kind Krisp uses). The AI filters run in your browser; the models are
+served from the site itself and your audio never leaves your device to be
+cleaned. On a fan-and-keyboard recording, AI · Strong lowered the background
+by 33 dB. Switch any time from the arrow beside the microphone button, and try
+it before joining with *Hear yourself*.
+
 **Mute and deafen, separately.** Mute stops others hearing you. Deafen stops
 you hearing others. Neither touches the other, and other people see each
 state on your tile.

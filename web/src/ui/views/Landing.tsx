@@ -40,6 +40,10 @@ export function Landing() {
       <main>
         <section class="hero">
           <div class="hero-copy">
+            <p class="eyebrow">
+              <span class="eyebrow-dot" />
+              Free · No account · End-to-end encrypted
+            </p>
             <h1>Talk, share your screen, and watch together.</h1>
             <p class="lede">
               {FROM_FILE
@@ -86,6 +90,84 @@ export function Landing() {
           </div>
 
           <SharePreviewFigure />
+        </section>
+
+        <section class="voice" aria-labelledby="voice-title">
+          <div class="voice-copy">
+            <p class="kicker">Your voice, not your room</p>
+            <h2 id="voice-title">Keyboards, fans and traffic stay on your side.</h2>
+            <p>
+              Choose how much of the room to filter out. The strongest setting runs a neural
+              network in your browser that strips background noise and leaves your voice natural.
+              In our tests it cut a fan-and-keyboard background by 33 dB.
+            </p>
+            <p class="voice-small">
+              It runs on your device. Your audio is never sent anywhere to be cleaned.
+            </p>
+          </div>
+          <div class="voice-demo" aria-hidden="true">
+            <div class="voice-modes">
+              <span>Off</span>
+              <span>Standard</span>
+              <span>AI · Light</span>
+              <span>AI · Strong</span>
+            </div>
+            <svg class="voice-wave" viewBox="0 0 600 160" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="vw" x1="0" x2="1">
+                  <stop offset="0" stop-color="var(--brass)" stop-opacity="0.2" />
+                  <stop offset="0.5" stop-color="var(--brass)" />
+                  <stop offset="1" stop-color="var(--brass)" stop-opacity="0.2" />
+                </linearGradient>
+              </defs>
+              <g class="vw-noise">
+                {Array.from({ length: 75 }, (_, i) => {
+                  const h = 10 + ((i * 37) % 23);
+                  return <rect key={i} x={i * 8} y={80 - h / 2} width="3" height={h} rx="1.5" />;
+                })}
+              </g>
+              <g class="vw-voice">
+                {Array.from({ length: 75 }, (_, i) => {
+                  const t = i / 74;
+                  const env = Math.max(0, Math.sin(t * Math.PI * 3.2)) * (0.55 + 0.45 * Math.sin(t * 19));
+                  const h = 6 + Math.abs(env) * 120;
+                  return <rect key={i} x={i * 8} y={80 - h / 2} width="3" height={h} rx="1.5" />;
+                })}
+              </g>
+            </svg>
+            <div class="voice-meter">
+              <span>Background noise</span>
+              <span class="voice-meter-bar">
+                <i />
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section class="steps" aria-label="How it works">
+          <ol>
+            <li>
+              <span class="step-n">1</span>
+              <div>
+                <h3>Start a room</h3>
+                <p>One click. No sign-up, no download.</p>
+              </div>
+            </li>
+            <li>
+              <span class="step-n">2</span>
+              <div>
+                <h3>Send the link</h3>
+                <p>Anyone who opens it can join, on a computer or a phone.</p>
+              </div>
+            </li>
+            <li>
+              <span class="step-n">3</span>
+              <div>
+                <h3>Talk, share, watch</h3>
+                <p>Up to six people, encrypted the whole way.</p>
+              </div>
+            </li>
+          </ol>
         </section>
 
         <section class="points" aria-label="What Shh VC does">
@@ -184,6 +266,15 @@ export function Landing() {
         </section>
       </main>
 
+      <section class="cta">
+        <h2>Ready when you are.</h2>
+        <p>It takes a second to start, and nothing to install.</p>
+        <Button variant="primary" size="lg" onClick={startNewRoom}>
+          Start a room
+          <ArrowRight />
+        </Button>
+      </section>
+
       <footer class="landing-foot">
         <span>Free and open source. No tracking and no third-party scripts.</span>
       </footer>
@@ -234,6 +325,23 @@ function SharePreviewFigure() {
           </span>
           <span class="figure-btn ghost">Cancel</span>
           <span class="figure-btn go">Start sharing</span>
+        </div>
+        <div class="sat sat-tile">
+          <span class="sat-avatar">MT</span>
+          <span class="sat-name">Mei</span>
+          <span class="sat-bars">
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+        </div>
+        <div class="sat sat-ns">
+          <span class="sat-ns-label">AI noise filter</span>
+          <svg viewBox="0 0 120 28" class="sat-wave">
+            <path class="wave-noisy" d="M0 14 L4 9 L7 19 L10 6 L13 21 L16 10 L19 17 L22 5 L25 22 L28 11 L31 16 L34 7 L37 20 L40 12 L43 15 L46 4 L49 23 L52 10 L55 18 L58 6 L61 21 L64 9 L67 17 L70 5 L73 22 L76 12 L79 15 L82 7 L85 20 L88 11 L91 17 L94 6 L97 21 L100 10 L103 16 L106 8 L109 19 L112 12 L116 15 L120 14" />
+            <path class="wave-clean" d="M0 14 L20 14 C24 14 26 6 30 6 C34 6 35 22 39 22 C43 22 44 8 48 8 C51 8 52 18 55 18 C58 18 59 14 62 14 L74 14 C77 14 78 9 81 9 C84 9 85 19 88 19 C91 19 92 14 95 14 L120 14" />
+          </svg>
         </div>
         <svg class="figure-cursor" viewBox="0 0 24 24" width="22" height="22">
           <path d="M5 3l14 8-6.2 1.6L10.5 19z" fill="var(--bone)" stroke="var(--bg)" stroke-width="1.4" stroke-linejoin="round" />
