@@ -10,6 +10,7 @@ import { Ambient } from './Ambient.tsx';
 import { Diagnostics, useReceiveStats } from './Diagnostics.tsx';
 import { FileHostPlayer, SharedBar } from './FilePlayer.tsx';
 import { MoviePlayer } from './MoviePlayer.tsx';
+import { OwnPlayer } from './OwnPlayer.tsx';
 import { ParticipantTile, ScreenTile } from './Tile.tsx';
 
 function useSize() {
@@ -161,7 +162,7 @@ export function Stage(props: {
             {current === 'file' ? (
               <FileHostPlayer session={session} />
             ) : current === 'movie' ? (
-              <MoviePlayer session={session} />
+              movie?.kind === 'own' ? <OwnPlayer session={session} /> : <MoviePlayer session={session} />
             ) : (
               primary && (
                 <ScreenTile key={primary.identity} session={session} view={primary}>

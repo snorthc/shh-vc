@@ -1447,3 +1447,102 @@ body.scrollable::before {
     opacity: 0;
   }
 }
+
+/* ---------- Landing: Netflix on everyone's own account ---------- */
+
+@media (min-width: 861px) {
+  .sync-section {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  }
+}
+
+.sync-demo {
+  position: relative;
+  height: 300px;
+}
+
+.sd-device {
+  position: absolute;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  border: 1px solid var(--line-strong);
+  background:
+    radial-gradient(90% 80% at 50% 40%, oklch(0.82 0.105 82 / 0.08), transparent 70%),
+    var(--surface-1);
+  box-shadow: var(--shadow-dialog);
+}
+
+.sd-clock {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.sd-tag {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--brass-dim);
+  color: var(--brass);
+  font-size: var(--fs-11);
+  font-weight: 560;
+}
+
+.sd-tv {
+  left: 0;
+  top: 0;
+  width: 62%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+}
+
+.sd-tv .sd-clock {
+  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+}
+
+.sd-laptop {
+  right: 4%;
+  top: 34%;
+  width: 52%;
+  aspect-ratio: 16 / 10;
+  border-radius: 10px 10px 4px 4px;
+  z-index: 1;
+}
+
+.sd-laptop::after {
+  content: '';
+  position: absolute;
+  left: -8%;
+  right: -8%;
+  bottom: -10px;
+  height: 10px;
+  border-radius: 0 0 10px 10px;
+  background: var(--surface-3);
+}
+
+.sd-laptop .sd-clock {
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+}
+
+.sd-phone {
+  left: 12%;
+  bottom: 0;
+  width: 18%;
+  aspect-ratio: 9 / 18;
+  border-radius: 16px;
+  z-index: 2;
+}
+
+.sd-phone .sd-clock {
+  font-size: clamp(0.85rem, 1.4vw, 1.05rem);
+}
+
+@media (max-width: 860px) {
+  .sync-section .sync-demo {
+    order: 2;
+    height: 240px;
+  }
+}

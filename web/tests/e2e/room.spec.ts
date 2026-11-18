@@ -418,7 +418,7 @@ describe('watch together', () => {
     await a.page.getByRole('menuitem', { name: /Watch together/ }).click();
     await a.page.getByLabel('Link to a video file').fill('https://www.youtube.com/watch?v=abc');
     await a.page.getByTestId('watch-start').click();
-    expect(await a.page.getByTestId('watch-error').innerText()).toContain('Share the tab instead');
+    expect(await a.page.getByTestId('watch-error').innerText()).toContain('own account');
     await a.page.getByLabel('Link to a video file').fill(`${h.origin}/__media/film.webm`);
     await a.page.getByTestId('watch-start').click();
 

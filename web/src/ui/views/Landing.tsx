@@ -144,6 +144,37 @@ export function Landing() {
           </div>
         </section>
 
+        <section class="voice sync-section" aria-labelledby="sync-title">
+          <div class="sync-demo" aria-hidden="true">
+            <div class="sd-device sd-laptop">
+              <span class="sd-clock">42:17</span>
+              <span class="sd-tag">Netflix tab · in sync</span>
+            </div>
+            <div class="sd-device sd-tv">
+              <span class="sd-clock">42:17</span>
+            </div>
+            <div class="sd-device sd-phone">
+              <span class="sd-clock">42:17</span>
+            </div>
+          </div>
+          <div class="voice-copy">
+            <p class="kicker">Netflix night, from anywhere</p>
+            <h2 id="sync-title">Everyone on their own Netflix, all at the same second.</h2>
+            <p>
+              Each person plays it on their own account — a laptop, a phone, the TV. Shh VC keeps a
+              shared clock and counts everyone in, so you all press play together.
+            </p>
+            <p>
+              On a computer, one bookmark links your Netflix tab to the call: pause, play and skip
+              there, and everyone’s Netflix follows. The host decides who gets the remote.
+            </p>
+            <p class="voice-small">
+              Shh VC never sends the film itself, only play, pause and the time. Everyone needs their
+              own way to watch.
+            </p>
+          </div>
+        </section>
+
         <section class="steps" aria-label="How it works">
           <ol>
             <li>
@@ -192,8 +223,8 @@ export function Landing() {
             <Film />
             <h2>Built for watching together</h2>
             <p>
-              Put on a film from your device, a link, or a browser tab. Everyone gets the pause
-              button, with chat and reactions alongside.
+              Netflix on everyone’s own account, a film from your device, or a link. Everyone gets
+              the pause button unless the host keeps the remote.
             </p>
           </article>
         </section>

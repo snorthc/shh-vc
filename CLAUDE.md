@@ -61,12 +61,19 @@ bug, even if every test passes.
 
 ## Watching together
 
-18. Shh VC can control playback only when Shh VC is the player: a video
-    **link** (each client plays it) or a **file** (one device plays and streams
-    it). For those, every participant's pause, play and skip must work.
+18. Shh VC controls playback itself for a video **link** (each client plays
+    it) and a **file** (one device plays and streams it). For **own-account**
+    watching (Netflix and the like) it keeps a shared clock; a linked tab
+    follows it through the bookmarklet. Everyone's pause, play and skip work
+    unless the host's rule (36) says otherwise.
 19. For a shared tab, only the sharer can press pause. Viewers get "Ask to
     pause", which is a request and is labelled as one.
-20. Never bypass DRM or a site's protections.
+20. Never bypass DRM or a site's protections. The bookmarklet only presses the
+    site's own play, pause and seek controls and reads the time, episode id and
+    title. It never captures, copies or sends the picture or sound, and never
+    carries the room secret (the link window is on this origin, found by
+    BroadcastChannel). On Netflix it uses Netflix's player controls, never the
+    video element's currentTime.
 
 ## Mute and deafen
 
@@ -96,8 +103,9 @@ bug, even if every test passes.
 28. Discovery goes through public relays under a key derived from the room
     secret. Nothing sent to a relay may contain the secret, the room id, a
     name, a message or readable SDP. `tests/e2e/direct.spec.ts` checks this.
-29. There is no server, so there are **no host controls**. Do not render
-    lock, remove or mute-for-everyone in this mode.
+29. There is no server, so there is **no moderation**. Do not render lock,
+    remove or mute-for-everyone in this mode. The playback rule (36) is the
+    only host power, because it needs no server.
 30. If no relay is reachable the room must say that nobody can find it.
 
 ## Microphone and voice
@@ -122,3 +130,17 @@ bug, even if every test passes.
 26. Everything must run on free infrastructure. No paid API, SDK, font,
     library or service. Relay-only media means bandwidth is the budget: the
     six-person cap is enforced server-side.
+
+## Who controls playback
+
+36. The room creator's host key (address bar only, never storage, never the
+    invite) derives an Ed25519 key. Its **public** half rides in the invite as
+    `&p=`. The host signs the rule (`policy`) and their own playback commands;
+    every device drops commands the rule forbids and checks before sending
+    its own. Levels: everyone / everyone pauses, host does the rest / host
+    only. Others get **Ask to pause**.
+37. The rule lapses to "everyone" 30 seconds after the last signed message
+    from the host (`HOST_GRACE_MS`), so a departed host never freezes a room.
+38. Enforcement is per device: a modified client can only misbehave on its
+    own player. Never describe it as stronger than that.
+

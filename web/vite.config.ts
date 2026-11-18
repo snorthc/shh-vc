@@ -38,7 +38,12 @@ export default defineConfig({
   plugins: [preact(), pagePolicy, ...(SINGLE ? [viteSingleFile({ removeViteModuleLoader: true })] : [])],
   build: SINGLE
     ? { target: 'es2022', sourcemap: false, assetsInlineLimit: 100_000_000, cssCodeSplit: false }
-    : { target: 'es2022', sourcemap: true },
+    : {
+        target: 'es2022',
+        sourcemap: true,
+        // link.html is the small window the Netflix bookmarklet opens.
+        rollupOptions: { input: { main: 'index.html', link: 'link.html' } },
+      },
   server: {
     port: 5173,
     strictPort: true,

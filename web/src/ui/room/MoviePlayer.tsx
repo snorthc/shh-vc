@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { Pause, Play, Volume2, VolumeX, X } from 'lucide-preact';
+import { Hand, Pause, Play, Volume2, VolumeX, X } from 'lucide-preact';
 import { formatDuration } from '../../app/util.ts';
 import type { RoomSession } from '../../call/session.ts';
 import { expectedPosition, planCorrection } from '../../movie/sync.ts';
 import { IconButton, Slider } from '../components/primitives.tsx';
+import { ControlPicker, controlText, usePauseOrAsk } from './OwnPlayer.tsx';
 
 /**
  * Synchronised playback of a direct video link. Each person loads the file
@@ -23,6 +24,7 @@ export function MoviePlayer(props: { session: RoomSession; children?: preact.Com
   const [failed, setFailed] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const deafened = session.deafened.value;
+  const { canPause, canOther, asked, ask } = usePauseOrAsk(session);
 
   // Adopt shared state: position, then play or pause.
   useEffect(() => {
@@ -76,7 +78,8 @@ export function MoviePlayer(props: { session: RoomSession; children?: preact.Com
   const toggle = () => {
     const v = videoRef.current;
     if (!v) return;
-    session.setMovie({ playing: !state.playing, position: v.currentTime });
+    if (state.playing && !canPause) ask();
+    else session.setMovie({ playing: !state.playing, position: v.currentTime });
   };
 
   return (
@@ -115,16 +118,22 @@ export function MoviePlayer(props: { session: RoomSession; children?: preact.Com
 
       <div class="content-chip">
         <span class="sync-dot" data-syncing={syncing} />
-        Watching together · anyone can pause · {syncing ? 'catching up' : 'in sync'}
+        Watching together · {controlText(session.controlLevel.value)} · {syncing ? 'catching up' : 'in sync'}
       </div>
 
       <div class="movie-bar" onPointerDown={(e) => e.stopPropagation()}>
-        <IconButton label={state.playing ? 'Pause for everyone' : 'Play for everyone'} onClick={toggle} data-testid="movie-toggle">
-          {state.playing ? <Pause /> : <Play />}
+        <IconButton
+          label={state.playing ? (canPause ? 'Pause for everyone' : asked ? 'Asked the host' : 'Ask the host to pause') : canOther ? 'Play for everyone' : 'Only the host can press play'}
+          onClick={toggle}
+          disabled={state.playing ? asked : !canOther}
+          data-testid="movie-toggle"
+        >
+          {state.playing ? canPause ? <Pause /> : <Hand /> : <Play />}
         </IconButton>
         <span class="mono movie-time">{formatDuration(shown)}</span>
         <Slider
           label="Seek for everyone"
+          disabled={!canOther}
           min={0}
           max={Math.max(1, duration)}
           step={0.1}
@@ -147,9 +156,12 @@ export function MoviePlayer(props: { session: RoomSession; children?: preact.Com
         <div class="movie-vol">
           <Slider label="Video volume for me" value={muted ? 0 : volume} onInput={(v) => { setVolume(v); setMuted(false); }} />
         </div>
-        <IconButton label="Stop for everyone" onClick={() => session.setMovie(null)} data-testid="movie-close">
-          <X />
-        </IconButton>
+        <ControlPicker session={session} />
+        {canOther && (
+          <IconButton label="Stop for everyone" onClick={() => session.setMovie(null)} data-testid="movie-close">
+            <X />
+          </IconButton>
+        )}
       </div>
       {props.children}
     </div>

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Pause, Play, Volume2, VolumeX, X } from 'lucide-preact';
+import { Hand, Pause, Play, Volume2, VolumeX, X } from 'lucide-preact';
 import { formatDuration } from '../../app/util.ts';
 import type { FileShow, RoomSession } from '../../call/session.ts';
 import { useTicker } from '../components/hooks.ts';
 import { IconButton, Slider } from '../components/primitives.tsx';
+import { ControlPicker, controlText, usePauseOrAsk } from './OwnPlayer.tsx';
 
 /**
  * Play, pause and skip for a file someone is playing for the room. The same
@@ -16,21 +17,24 @@ export function SharedBar(props: { session: RoomSession; show: FileShow; childre
   useTicker(500, show.playing);
   const live = show.playing ? show.position + (Date.now() - show.at) / 1000 : show.position;
   const position = Math.min(scrub ?? live, show.duration || Infinity);
+  const { canPause, canOther, asked, ask } = usePauseOrAsk(session);
 
   return (
     <div class="movie-bar" onPointerDown={(e) => e.stopPropagation()} data-testid="shared-bar">
       <IconButton
-        label={show.playing ? 'Pause for everyone' : 'Play for everyone'}
-        onClick={() => session.fileCommand({ action: show.playing ? 'pause' : 'play' })}
+        label={show.playing ? (canPause ? 'Pause for everyone' : asked ? 'Asked the host' : 'Ask the host to pause') : canOther ? 'Play for everyone' : 'Only the host can press play'}
+        onClick={() => (show.playing && !canPause ? ask() : session.fileCommand({ action: show.playing ? 'pause' : 'play' }))}
+        disabled={show.playing ? asked : !canOther}
         data-testid="shared-toggle"
       >
-        {show.playing ? <Pause /> : <Play />}
+        {show.playing ? canPause ? <Pause /> : <Hand /> : <Play />}
       </IconButton>
       <span class="mono movie-time" data-testid="shared-time">
         {formatDuration(position)}
       </span>
       <Slider
         label="Skip for everyone"
+        disabled={!canOther}
         min={0}
         max={Math.max(1, show.duration)}
         step={0.5}
@@ -43,6 +47,7 @@ export function SharedBar(props: { session: RoomSession; show: FileShow; childre
       />
       <span class="mono movie-time">{show.duration ? formatDuration(show.duration) : '–:––'}</span>
       {props.children}
+      <ControlPicker session={session} />
       {isHost && (
         <IconButton label="Stop for everyone" onClick={() => void session.stopFileShow()} data-testid="file-stop">
           <X />
@@ -131,7 +136,7 @@ export function FileHostPlayer(props: { session: RoomSession; children?: preact.
       )}
       <div class="content-chip live">
         <span class="live-dot" />
-        You are playing {file.name} · anyone can pause
+        You are playing {file.name} · {controlText(session.controlLevel.value)}
       </div>
       {show && (
         <SharedBar session={session} show={show}>

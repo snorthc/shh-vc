@@ -17,6 +17,14 @@ export interface MovieState {
   rev: number;
   /** Identity of whoever made the change. */
   by: string;
+  /** 'own': everyone plays it on their own device and account (Netflix, a TV). */
+  kind?: 'own';
+  /** What is on, as typed by a person or read from their Netflix tab. */
+  title?: string;
+  /** Netflix's id for the episode, so a linked tab can tell it is on the same one. */
+  watch?: string;
+  /** Seconds of count-in before the clock starts moving, so people on TVs press play together. */
+  countIn?: number;
 }
 
 export interface HeldState extends MovieState {
@@ -27,7 +35,13 @@ export interface HeldState extends MovieState {
 /** Where playback should be right now, given a held state. */
 export function expectedPosition(state: HeldState, now: number): number {
   if (!state.playing) return state.position;
-  return state.position + Math.max(0, now - state.receivedAt) / 1000;
+  return state.position + Math.max(0, (now - state.receivedAt) / 1000 - (state.countIn ?? 0));
+}
+
+/** Seconds left in the count-in, or 0 once the clock is running. */
+export function countInLeft(state: HeldState, now: number): number {
+  if (!state.playing || !state.countIn) return 0;
+  return Math.max(0, state.countIn - (now - state.receivedAt) / 1000);
 }
 
 /** Adopt `incoming` only if it is newer; ties break on the author's identity. */
@@ -83,8 +97,22 @@ export function checkMovieUrl(input: string, pageIsHttps: boolean): UrlCheck {
     return {
       ok: false,
       reason:
-        'Shh VC cannot control that site’s player. Share the tab instead and everyone will see it.',
+        'Shh VC can’t play that site itself. Choose “On everyone’s own account” to sync it, or share the tab.',
     };
   }
   return { ok: true, url: url.toString() };
+}
+
+/** Linked players further apart than this are jumped back in line. */
+export const OWN_RESYNC_SECONDS = 1.5;
+/** Pressing play on the shared clock counts everyone in. */
+export const COUNTDOWN_SECONDS = 3;
+
+/** "1:02:03", "12:30", "90" → seconds; undefined when it is not a time. */
+export function parseClock(input: string): number | undefined {
+  const parts = input.trim().split(':');
+  if (parts.length > 3 || parts.some((p) => !/^\d{1,3}$/.test(p))) return undefined;
+  const n = parts.map(Number);
+  if (n.slice(1).some((v) => v >= 60)) return undefined;
+  return n.reduce((acc, v) => acc * 60 + v, 0);
 }

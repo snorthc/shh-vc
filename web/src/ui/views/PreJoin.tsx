@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { ArrowLeft, Check, Copy, Headphones, Lock, Mic, MicOff, Settings as SettingsIcon, Video, VideoOff } from 'lucide-preact';
 import { DIRECT, FROM_FILE } from '../../app/mode.ts';
 import { settings, updateSettings } from '../../app/settings.ts';
-import { backToStart, inviteLink, join, joinError, pending, preloadRoom, view } from '../../app/state.ts';
+import { backToStart, hostPubOf, inviteLink, join, joinError, pending, preloadRoom, view } from '../../app/state.ts';
 import { MicPipeline } from '../../audio/mic.ts';
 import { mediaErrorText } from '../../call/errors.ts';
 import { Avatar, Button, IconButton, Mark } from '../components/primitives.tsx';
@@ -121,7 +121,7 @@ export function PreJoin() {
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(inviteLink(room.secret));
+      await navigator.clipboard.writeText(inviteLink(room.secret, hostPubOf(room)));
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -260,7 +260,7 @@ export function PreJoin() {
             <div class="field">
               <span class="label">{FROM_FILE ? 'Room code' : 'Invite link'}</span>
               <div class="invite-row">
-                <input class="input mono" type="text" readOnly value={inviteLink(room.secret)} aria-label={FROM_FILE ? 'Room code' : 'Invite link'} onFocus={(e) => (e.target as HTMLInputElement).select()} />
+                <input class="input mono" type="text" readOnly value={inviteLink(room.secret, hostPubOf(room))} aria-label={FROM_FILE ? 'Room code' : 'Invite link'} onFocus={(e) => (e.target as HTMLInputElement).select()} />
                 <Button onClick={copy} aria-live="polite">
                   {copied ? <Check /> : <Copy />}
                   {copied ? 'Copied' : 'Copy'}

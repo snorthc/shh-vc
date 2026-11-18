@@ -150,7 +150,7 @@ export function RoomView(props: { session: RoomSession }) {
 
   const copyInvite = async () => {
     try {
-      await navigator.clipboard.writeText(inviteLink(session.roomSecret));
+      await navigator.clipboard.writeText(inviteLink(session.roomSecret, session.hostPub));
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -465,7 +465,7 @@ export function RoomView(props: { session: RoomSession }) {
             />
           </>
         )}
-        <MenuItem icon={<Clapperboard />} label="Watch together" sub="Play a film or episode for the room. Everyone can pause." onSelect={() => { setMenu(null); setDialog('watch'); }} />
+        <MenuItem icon={<Clapperboard />} label="Watch together" sub="Netflix on everyone’s own account, a file or a link." onSelect={() => { setMenu(null); setDialog('watch'); }} />
         {hasContent && (
           <>
             <div class="menu-sep" />

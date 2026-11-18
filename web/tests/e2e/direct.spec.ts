@@ -53,12 +53,15 @@ describe.skipIf(!DIRECT)('serverless build', () => {
     await b.ctx.close();
   }, 120_000);
 
-  it('offers no host controls, since there is no server to enforce them', async () => {
+  it('offers no moderation, since there is no server to enforce it', async () => {
     const c = await newClient(h);
     await c.page.goto(h.origin);
     await c.page.getByTestId('start-room').click();
-    expect(c.page.url()).not.toContain('h=');
-    expect(await c.page.locator('.prejoin-form').innerText()).not.toContain('host');
+    // The host key stays in the creator's address bar; the invite carries only its public half.
+    expect(c.page.url()).toContain('h=');
+    const invite = await c.page.locator('.prejoin-form input[readonly]').inputValue();
+    expect(invite).not.toContain('h=');
+    expect(invite).toMatch(/&p=[A-Za-z0-9_-]{43}$/);
     await c.page.getByLabel('Your name').fill('Solo');
     await c.page.getByTestId('join').click();
     await c.page.locator('[data-testid="room"][data-status="connected"]').waitFor({ timeout: 30_000 });

@@ -105,7 +105,7 @@ export function PeoplePanel(props: { session: RoomSession }) {
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(inviteLink(session.roomSecret));
+      await navigator.clipboard.writeText(inviteLink(session.roomSecret, session.hostPub));
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {

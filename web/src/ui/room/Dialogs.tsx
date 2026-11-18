@@ -1,10 +1,11 @@
 import { useRef, useState } from 'preact/hooks';
-import { FileVideo, Link2, PanelTop } from 'lucide-preact';
+import { Clapperboard, FileVideo, Link2, PanelTop } from 'lucide-preact';
 import type { RoomSession } from '../../call/session.ts';
 import { checkMovieUrl } from '../../movie/sync.ts';
 import { filePlaybackSupported, screenShareSupported } from '../../share/support.ts';
 import { Dialog } from '../components/Dialog.tsx';
 import { Button } from '../components/primitives.tsx';
+import { SyncSetup } from './OwnPlayer.tsx';
 
 export function VerifyDialog(props: { session: RoomSession; open: boolean; onClose: () => void }) {
   const { session } = props;
@@ -54,6 +55,9 @@ export function WatchDialog(props: {
 }) {
   const { session } = props;
   const [url, setUrl] = useState('');
+  const [title, setTitle] = useState('');
+  const [setup, setSetup] = useState(false);
+  const canStart = session.allowed('other');
   const [error, setError] = useState<string | undefined>();
   const fileInput = useRef<HTMLInputElement>(null);
   const canPlayFiles = filePlaybackSupported();
@@ -82,6 +86,51 @@ export function WatchDialog(props: {
       testId="watch-dialog"
     >
       <div class="watch-options">
+        <section class="watch-option">
+          <Clapperboard />
+          <form
+            class="grow"
+            novalidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (session.setMovie({ url: 'own', kind: 'own', title: title.trim().slice(0, 120) })) {
+                setTitle('');
+                props.onClose();
+              }
+            }}
+          >
+            <h3>
+              <label for="own-title">On everyone’s own Netflix, or any service</label>
+            </h3>
+            <p>
+              Everyone plays it on their own account and device — a laptop, phone or TV. Shh VC
+              keeps a shared clock with a count-in, so you all press play together.{' '}
+              <strong>On a computer, a bookmark syncs your Netflix tab automatically.</strong>
+            </p>
+            <div class="invite-row">
+              <input
+                id="own-title"
+                class="input"
+                type="text"
+                autocomplete="off"
+                maxLength={120}
+                placeholder="What are you watching? (optional)"
+                value={title}
+                onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
+                data-testid="own-title-input"
+              />
+              <Button type="submit" variant="primary" disabled={!canStart} data-testid="own-start">
+                Start
+              </Button>
+            </div>
+            {!canStart && <p class="hint">The host has the say over what you watch.</p>}
+            <button type="button" class="link-btn" aria-expanded={setup} onClick={() => setSetup(!setup)}>
+              {setup ? 'Hide' : 'Set up automatic Netflix sync'}
+            </button>
+            {setup && <SyncSetup />}
+          </form>
+        </section>
+
         <section class="watch-option">
           <FileVideo />
           <div class="grow">
@@ -154,11 +203,11 @@ export function WatchDialog(props: {
         <section class="watch-option">
           <PanelTop />
           <div class="grow">
-            <h3>Netflix, YouTube or any other site</h3>
+            <h3>Share a tab with sound</h3>
             <p>
-              Share the browser tab it is playing in, with sound. Those sites run their own player,
-              so only the person sharing can press pause — everyone else gets an{' '}
-              <strong>Ask to pause</strong> button that pings them.
+              Everyone sees what is playing in one of your tabs, so only you need an account. Only
+              you can press pause — everyone else gets <strong>Ask to pause</strong>. Netflix and
+              other protected services show black when shared; use the first option for those.
             </p>
             {!canShare && <p class="hint">Phone and tablet browsers cannot share a tab.</p>}
             <Button

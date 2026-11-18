@@ -96,6 +96,16 @@ export async function startHarness(
       if (!file.startsWith(FIXTURES) || !existsSync(file)) return void res.writeHead(404).end();
       return serveFile(file, req, res);
     }
+    if (url.pathname.startsWith('/__netflix')) {
+      // A stand-in for a Netflix watch page: Netflix's player controls over a plain video.
+      // The -coop variant sends the header that cuts a page off from windows it opens.
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        ...(url.pathname.startsWith('/__netflix-coop') ? { 'cross-origin-opener-policy': 'same-origin' } : {}),
+      });
+      res.end(NETFLIX_PAGE);
+      return;
+    }
     if (url.pathname === '/__doc') {
       // A stand-in "document" tab, so a tab share has something real to show.
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
@@ -200,6 +210,8 @@ export async function joinRoom(
     mic?: boolean;
     /** Saved preferences to start with, e.g. { suppression: 'off' }. */
     settings?: Record<string, unknown>;
+    /** Anything else for the fragment, e.g. "&p=…" from an invite link. */
+    extra?: string;
   } = {},
 ): Promise<Client> {
   const c = await newClient(h, opts);
@@ -210,7 +222,7 @@ export async function joinRoom(
       localStorage.setItem(key, JSON.stringify({ ...current, ...prefs }));
     }, opts.settings);
   }
-  await c.page.goto(`${h.origin}/#k=${secret}${opts.host ? `&h=${opts.host}` : ''}`, { waitUntil: 'load' });
+  await c.page.goto(`${h.origin}/#k=${secret}${opts.host ? `&h=${opts.host}` : ''}${opts.extra ?? ''}`, { waitUntil: 'load' });
   await c.page.getByLabel('Your name').fill(name);
   const micBtn = c.page.locator('.preview-controls .dock-btn').first();
   const camBtn = c.page.locator('.preview-controls .dock-btn').nth(1);
@@ -236,3 +248,21 @@ th{font-size:13px;color:#7a756b;font-weight:600}</style></head><body><main>
 <tr><td>3</td><td>Fix list and polish</td><td>Jonas</td></tr><tr><td>4</td><td>General availability</td><td>Everyone</td></tr></table>
 <h2>Open questions</h2><ul><li>Do we need a migration note for existing links?</li><li>Who covers support during launch week?</li></ul>
 </main></body></html>`;
+
+const NETFLIX_PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Netflix</title></head>
+<body style="margin:0;background:#000;color:#fff;font:14px system-ui">
+<video id="v" src="/__media/film.webm" muted loop playsinline style="width:640px;display:block"></video>
+<div data-uia="video-title"><h4>Test Show</h4><span>S1:E1</span></div>
+<script>
+const v = document.getElementById('v');
+// Netflix's player breaks when the video element is skipped directly; count any attempt.
+window.__direct = 0;
+const ct = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
+Object.defineProperty(v, 'currentTime', { get() { return ct.get.call(v); }, set(x) { window.__direct++; ct.set.call(v, x); } });
+const player = {
+  play() { v.play(); }, pause() { v.pause(); }, seek(ms) { ct.set.call(v, ms / 1000); },
+  getCurrentTime() { return ct.get.call(v) * 1000; }, isPaused() { return v.paused; },
+};
+window.netflix = { appContext: { state: { playerApp: { getAPI: () => ({ videoPlayer: {
+  getAllPlayerSessionIds: () => ['watch-1'], getVideoPlayerBySessionId: () => player } }) } } } };
+</script></body></html>`;

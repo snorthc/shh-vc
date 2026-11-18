@@ -169,7 +169,7 @@ describe('watch-together sync', () => {
     for (const site of ['https://www.youtube.com/watch?v=1', 'https://youtu.be/1', 'https://www.netflix.com/watch/1']) {
       const r = checkMovieUrl(site, true);
       expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.reason).toMatch(/Share the tab/);
+      if (!r.ok) expect(r.reason).toMatch(/own account/);
     }
   });
 });

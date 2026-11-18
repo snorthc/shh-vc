@@ -49,7 +49,20 @@ import {
   MAX_NAME_LENGTH,
   type VeilMessage,
 } from '../crypto/wire.ts';
-import { type HeldState, type MovieState, shouldAdopt } from '../movie/sync.ts';
+import {
+  type Change,
+  classifyChange,
+  type ControlLevel,
+  effectiveLevel,
+  hostSeed,
+  isLevel,
+  mayChange,
+  POLICY_INTERVAL_MS,
+  signAsHost,
+  verifyHost,
+} from '../movie/control.ts';
+import { PlayerLink } from '../movie/link.ts';
+import { expectedPosition, type HeldState, type MovieState, shouldAdopt } from '../movie/sync.ts';
 import { MeshRoom } from '../mesh/room.ts';
 import { play } from '../sfx/sounds.ts';
 import { ShareController } from '../share/controller.ts';
@@ -116,11 +129,12 @@ type AppWire =
   | { t: 'typing' }
   | { t: 'state'; deafened: boolean; hue: number; locked?: boolean; mrev: number }
   | { t: 'stage-react'; emoji: string }
-  | { t: 'movie'; state: MovieState }
+  | { t: 'movie'; state: MovieState; sig?: string }
+  | { t: 'policy'; level: ControlLevel; rev: number; sig: string }
   | { t: 'movie-req' }
   | { t: 'file-state'; name: string; playing: boolean; position: number; duration: number }
   | { t: 'file-end' }
-  | ({ t: 'file-cmd' } & FileCommand)
+  | ({ t: 'file-cmd'; sig?: string } & FileCommand)
   | { t: 'nudge'; kind: 'pause' | 'play' };
 
 export interface SessionOptions {
@@ -128,6 +142,8 @@ export interface SessionOptions {
   displayName: string;
   /** Present only for whoever created the room. Authorises moderation, nothing else. */
   hostKey?: string;
+  /** The host's public signing key from the invite link: who may set the playback rule. */
+  hostPub?: string;
   apiBase?: string;
 }
 
@@ -211,6 +227,16 @@ export class RoomSession {
   /** The host's player registers here to receive everyone's play, pause and skip. */
   onFileCommand: ((cmd: FileCommand, from: string) => void) | undefined;
   readonly startedAt = signal<number | undefined>(undefined);
+  /** Public key of whoever may set the playback rule, if this room has a host. */
+  readonly hostPub: string | undefined;
+  /** True on the host's own device. */
+  readonly controlHost: boolean;
+  /** The rule the host chose. */
+  readonly controlPolicy = signal<ControlLevel>('everyone');
+  /** The rule in force right now (it lapses while the host is away). */
+  readonly controlLevel = signal<ControlLevel>('everyone');
+  /** A Netflix (or other site's) tab linked through the bookmarklet. */
+  readonly link: PlayerLink;
 
   private readonly group: GroupKeys;
   private readonly keyProvider = DIRECT ? undefined : new VeilKeyProvider();
@@ -235,10 +261,16 @@ export class RoomSession {
   /** A command we sent that the host has not yet confirmed by its state. */
   private pendingFileCmd: { cmd: FileCommand; sentAt: number; tries: number } | undefined;
   private lastNudge = 0;
+  private readonly hostSeedBytes: Uint8Array | undefined;
+  private policyRev = 0;
+  private hostSeenAt = 0;
 
   constructor(opts: SessionOptions) {
     this.roomSecret = opts.roomSecret;
     this.hostKey = opts.hostKey;
+    this.hostPub = opts.hostPub;
+    this.hostSeedBytes = opts.hostKey ? hostSeed(opts.hostKey) : undefined;
+    this.controlHost = !!this.hostSeedBytes && !!opts.hostPub;
     this.apiBase = opts.apiBase ?? '/api';
     this.displayName = opts.displayName.slice(0, MAX_NAME_LENGTH);
     this.group = new GroupKeys({
@@ -295,6 +327,7 @@ export class RoomSession {
     this.audioHost.hidden = true;
     document.body.append(this.audioHost);
     this.share = new ShareController(this);
+    this.link = new PlayerLink(this);
     this.wire();
   }
 
@@ -319,6 +352,8 @@ export class RoomSession {
     this.timers.push(setInterval(() => void this.reconcile(), RECONCILE_INTERVAL_MS));
     this.timers.push(setInterval(() => this.sendPresence(), PRESENCE_INTERVAL_MS));
     this.timers.push(setInterval(() => this.sweepTyping(), 1000));
+    this.timers.push(setInterval(() => this.tickControl(), 2000));
+    if (this.controlHost) this.timers.push(setInterval(() => this.sendPolicy(), POLICY_INTERVAL_MS));
 
     batch(() => {
       this.status.value = 'connected';
@@ -336,6 +371,7 @@ export class RoomSession {
     this.onFileCommand = undefined;
     this.localFile.value = undefined;
     this.share.dispose();
+    this.link.dispose();
     this.mic?.stop();
     this.mic = undefined;
     this.signalCh.close();
@@ -636,13 +672,28 @@ export class RoomSession {
       case 'stage-react':
         if (typeof msg.emoji === 'string' && msg.emoji.length <= 16) this.showReaction(id, msg.emoji);
         return;
-      case 'movie':
-        this.adoptMovie(msg.state);
+      case 'movie': {
+        const state = msg.state;
+        if (typeof state !== 'object' || state === null) return;
+        const fromHost = this.signedByHost(state, msg.sig);
+        if (!mayChange(this.controlLevel.value, fromHost, classifyChange(this.movie.value, state, Date.now()))) return;
+        this.adoptMovie(state);
         return;
+      }
       case 'movie-req':
+        if (this.controlHost) this.sendPolicy();
         if (this.movie.value || this.movieRev > 0) {
-          void this.sendApp({ t: 'movie', state: this.currentMovieState() }).catch(() => undefined);
+          const state = this.currentMovieState();
+          void this.sendApp({ t: 'movie', state, ...this.hostSig(state) }).catch(() => undefined);
         }
+        return;
+      case 'policy':
+        if (!isLevel(msg.level) || !Number.isInteger(msg.rev) || msg.rev < this.policyRev) return;
+        if (!this.hostPub || !verifyHost(this.hostPub, this.roomSecret.roomId, { level: msg.level, rev: msg.rev }, msg.sig)) return;
+        this.policyRev = msg.rev;
+        this.hostSeenAt = Date.now();
+        this.controlPolicy.value = msg.level;
+        this.tickControl();
         return;
       case 'file-state': {
         // Only whoever is actually sharing can describe what they are playing.
@@ -664,7 +715,7 @@ export class RoomSession {
             if (Date.now() - pending.sentAt > 900) {
               pending.tries++;
               pending.sentAt = Date.now();
-              void this.sendApp({ t: 'file-cmd', ...pending.cmd }).catch(() => undefined);
+              void this.sendApp({ t: 'file-cmd', ...pending.cmd, ...this.hostSig(pending.cmd) }).catch(() => undefined);
             }
             return;
           }
@@ -685,6 +736,8 @@ export class RoomSession {
         return;
       case 'file-cmd':
         if (this.localFile.value && this.onFileCommand) {
+          const { t: _t, sig, ...cmd } = msg;
+          if (!mayChange(this.controlLevel.value, this.signedByHost(cmd, sig), msg.action === 'pause' ? 'pause' : 'other')) return;
           if (msg.action === 'seek') {
             if (Number.isFinite(msg.position)) this.onFileCommand({ action: 'seek', position: Math.max(0, msg.position) }, id);
           } else if (msg.action === 'play' || msg.action === 'pause') {
@@ -693,8 +746,12 @@ export class RoomSession {
         }
         return;
       case 'nudge':
-        if (this.share.phase.value === 'live' && (msg.kind === 'pause' || msg.kind === 'play')) {
+        if (msg.kind !== 'pause' && msg.kind !== 'play') return;
+        if (this.share.phase.value === 'live') {
           toast(`${this.nameOf(id)} asked you to ${msg.kind}`, 'info', 'They cannot press the button in your shared tab — only you can.');
+          play('notify');
+        } else if (this.controlHost && (this.movie.value || this.fileShow.value)) {
+          toast(`${this.nameOf(id)} asked to ${msg.kind}`, 'info', 'Only you can control playback right now. Press pause if you agree.');
           play('notify');
         }
         return;
@@ -789,6 +846,7 @@ export class RoomSession {
   fileCommand(cmd: FileCommand): void {
     const show = this.fileShow.value;
     if (!show) return;
+    if (!this.allowed(cmd.action === 'pause' ? 'pause' : 'other')) return;
     if (show.host === this.identity) {
       this.onFileCommand?.(cmd, this.identity);
       return;
@@ -801,7 +859,7 @@ export class RoomSession {
       at: Date.now(),
     };
     this.pendingFileCmd = { cmd, sentAt: Date.now(), tries: 0 };
-    void this.sendApp({ t: 'file-cmd', ...cmd }).catch(() => toast('Could not reach the room', 'warn'));
+    void this.sendApp({ t: 'file-cmd', ...cmd, ...this.hostSig(cmd) }).catch(() => toast('Could not reach the room', 'warn'));
   }
 
   /**
@@ -809,6 +867,7 @@ export class RoomSession {
    * in another site. This asks the person sharing to do it.
    */
   nudge(kind: 'pause' | 'play'): boolean {
+    // Also how someone without permission asks the host.
     const now = Date.now();
     if (now - this.lastNudge < 4000) return false;
     this.lastNudge = now;
@@ -920,50 +979,116 @@ export class RoomSession {
   private currentMovieState(): MovieState {
     const held = this.movie.value;
     if (!held) return { url: '', playing: false, position: 0, rev: this.movieRev, by: this.identity };
-    const position = held.playing
-      ? held.position + (Date.now() - held.receivedAt) / 1000
-      : held.position;
-    return { url: held.url, playing: held.playing, position, rev: held.rev, by: held.by };
+    const { receivedAt: _r, countIn: _c, ...rest } = held;
+    return { ...rest, position: expectedPosition(held, Date.now()) };
   }
 
   private adoptMovie(state: MovieState): void {
     if (typeof state !== 'object' || state === null) return;
     if (typeof state.url !== 'string' || typeof state.rev !== 'number') return;
-    if (state.url && !/^https?:\/\//i.test(state.url)) return;
+    const own = state.kind === 'own';
+    if (own ? state.url !== 'own' : state.url && !/^https?:\/\//i.test(state.url)) return;
     const current = this.movie.value ?? (this.movieRev > 0
       ? { url: '', playing: false, position: 0, rev: this.movieRev, by: '' }
       : undefined);
     if (!shouldAdopt(current, state)) return;
     this.movieRev = state.rev;
+    // A shared clock may sit a few seconds below zero: that is the count-in.
+    const floor = own ? -10 : 0;
     this.movie.value = state.url
       ? {
           url: state.url,
           playing: state.playing === true,
-          position: Number.isFinite(state.position) ? Math.max(0, state.position) : 0,
+          position: Number.isFinite(state.position) ? Math.min(Math.max(floor, state.position), 86_400) : 0,
           rev: state.rev,
           by: String(state.by ?? ''),
           receivedAt: Date.now(),
+          ...(own
+            ? {
+                kind: 'own' as const,
+                title: typeof state.title === 'string' ? state.title.slice(0, 120) : '',
+                ...(typeof state.watch === 'string' && /^\d{1,12}$/.test(state.watch) ? { watch: state.watch } : {}),
+                ...(state.playing === true && typeof state.countIn === 'number' && state.countIn > 0
+                  ? { countIn: Math.min(state.countIn, 5) }
+                  : {}),
+              }
+            : {}),
         }
       : undefined;
   }
 
-  /** Publish a new shared playback state. Everyone, including us, adopts it. */
-  setMovie(patch: { url?: string; playing?: boolean; position?: number } | null): void {
+  /**
+   * Publish a new shared playback state. Everyone, including us, adopts it.
+   * Returns false when the host's rule does not let us make this change.
+   */
+  setMovie(
+    patch: { url?: string; playing?: boolean; position?: number; kind?: 'own'; title?: string; watch?: string; countIn?: number } | null,
+  ): boolean {
     const base = this.currentMovieState();
-    const next: MovieState =
+    const fresh = patch !== null && patch.url !== undefined;
+    let next: MovieState =
       patch === null
         ? { url: '', playing: false, position: 0, rev: this.movieRev + 1, by: this.identity }
         : {
-            url: patch.url ?? base.url,
-            playing: patch.playing ?? (patch.url ? false : base.playing),
-            position: patch.position ?? (patch.url ? 0 : base.position),
+            ...(fresh ? { url: patch.url! } : base),
+            playing: patch.playing ?? (fresh ? false : base.playing),
+            position: patch.position ?? (fresh ? 0 : base.position),
             rev: this.movieRev + 1,
             by: this.identity,
           };
+    if (patch && 'title' in patch) next.title = patch.title;
+    if (patch?.watch !== undefined) next.watch = patch.watch;
+    if (patch?.kind) next.kind = patch.kind;
+    // A count-in belongs to the press of play that asked for it, never to later changes.
+    if (patch?.countIn) next.countIn = patch.countIn;
+    else delete next.countIn;
+    if (!next.kind) next = { url: next.url, playing: next.playing, position: next.position, rev: next.rev, by: next.by };
+    if (!this.allowed(classifyChange(this.movie.value, next, Date.now()))) return false;
     this.adoptMovie(next);
-    void this.sendApp({ t: 'movie', state: next }).catch(() =>
+    void this.sendApp({ t: 'movie', state: next, ...this.hostSig(next) }).catch(() =>
       toast('Could not sync playback', 'warn', 'You appear to be offline.'),
     );
+    return true;
+  }
+
+  // ---- who controls playback ------------------------------------------
+
+  /** Whether the rule in force lets us make this kind of change. */
+  allowed(change: Change): boolean {
+    return mayChange(this.controlLevel.value, this.controlHost, change);
+  }
+
+  /** Host only: choose who may control playback. */
+  setControlPolicy(level: ControlLevel): void {
+    if (!this.controlHost) return;
+    this.policyRev++;
+    this.controlPolicy.value = level;
+    this.tickControl();
+    this.sendPolicy();
+  }
+
+  private sendPolicy(): void {
+    if (!this.hostSeedBytes) return;
+    const payload = { level: this.controlPolicy.value, rev: this.policyRev };
+    const sig = signAsHost(this.hostSeedBytes, this.roomSecret.roomId, payload);
+    void this.sendApp({ t: 'policy', ...payload, sig }).catch(() => undefined);
+  }
+
+  private tickControl(): void {
+    const level = effectiveLevel(this.controlPolicy.value, this.hostSeenAt, Date.now(), this.controlHost);
+    if (level !== this.controlLevel.value) this.controlLevel.value = level;
+  }
+
+  private hostSig(payload: unknown): { sig?: string } {
+    if (!this.controlHost || !this.hostSeedBytes) return {};
+    return { sig: signAsHost(this.hostSeedBytes, this.roomSecret.roomId, payload) };
+  }
+
+  private signedByHost(payload: unknown, sig: unknown): boolean {
+    if (!this.hostPub || sig === undefined) return false;
+    const ok = verifyHost(this.hostPub, this.roomSecret.roomId, payload, sig);
+    if (ok) this.hostSeenAt = Date.now();
+    return ok;
   }
 
   // ---- key agreement -------------------------------------------------
